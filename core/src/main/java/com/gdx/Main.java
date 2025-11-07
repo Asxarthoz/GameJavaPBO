@@ -6,6 +6,7 @@ import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.utils.ScreenUtils;
@@ -28,6 +29,9 @@ public class Main extends ApplicationAdapter {
     float velocityY = 0;
     boolean isGround = true;
     Viewport viewport;
+    TextureRegion[] walkFrames;
+    Animation<TextureRegion> walkAnimation;
+    float stateTime;
 
     @Override
     public void create() {
@@ -35,10 +39,27 @@ public class Main extends ApplicationAdapter {
         playerRect = new Rectangle(playerX, playerY, 64, 128);
 
         batch = new SpriteBatch();
-        playerText = new Texture("player/player1.png");
+        playerText = new Texture("player_walk.png");
+        int frameCols = 7;
+        int frameRows = 1;
+
+        TextureRegion[][] tmp = TextureRegion.split(
+            playerText,
+            playerText.getWidth() / frameCols,
+            playerText.getHeight() / frameRows
+        );
+
         camera = new OrthographicCamera();
         viewport = new FitViewport(960, 540, camera);
         grassText = new Texture("grass.jpg");
+
+        walkFrames = new TextureRegion[frameCols];
+        for (int i = 0; i < frameCols; i++) {
+            walkFrames[i] = tmp[0][i];
+        }
+
+        walkAnimation = new Animation<TextureRegion>(0.1f, walkFrames);
+        stateTime = 0f;
 
 
 
@@ -51,6 +72,11 @@ public class Main extends ApplicationAdapter {
     public void render() {
         float oldX = playerX;
         float oldY = playerY;
+
+        stateTime += Gdx.graphics.getDeltaTime();
+
+        // Ambil frame berdasarkan waktu
+        TextureRegion currentFrame = walkAnimation.getKeyFrame(stateTime, true);
 
         ScreenUtils.clear(0.15f, 0.15f, 0.2f, 1f);
         float delta = Gdx.graphics.getDeltaTime();
@@ -81,6 +107,31 @@ public class Main extends ApplicationAdapter {
             speed = 550;
         } else {
             speed = 200;
+        }
+
+        if (Gdx.input.isKeyPressed(Input.Keys.D) || Gdx.input.isKeyPressed(Input.Keys.A)) {
+            stateTime += Gdx.graphics.getDeltaTime();
+            currentFrame = walkAnimation.getKeyFrame(stateTime, true);
+        } else {
+            currentFrame = walkFrames[0]; // frame diam
+        }
+
+        boolean facingRight = true;
+
+        if (Gdx.input.isKeyPressed(Input.Keys.D)) {
+            playerX += speed * delta;
+            facingRight = true;
+        }
+        if (Gdx.input.isKeyPressed(Input.Keys.A)) {
+            playerX -= speed * delta;
+            facingRight = false;
+        }
+
+        TextureRegion frame = walkAnimation.getKeyFrame(stateTime, true);
+
+// Flip sprite kalau ke kiri
+        if ((facingRight && frame.isFlipX()) || (!facingRight && !frame.isFlipX())) {
+            frame.flip(true, false);
         }
 
 
@@ -116,7 +167,7 @@ public class Main extends ApplicationAdapter {
             batch.draw(grassText, i, 0, 22, 22);
         }
 
-        batch.draw(playerText, playerX, playerY,64,128);
+        batch.draw(currentFrame, playerX, playerY, 1920 / 3f, 923 / 3f);
 
         batch.end();
     }
