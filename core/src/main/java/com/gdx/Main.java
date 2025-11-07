@@ -77,6 +77,7 @@ public class Main extends ApplicationAdapter {
     public void render() {
         float oldX = playerX;
         float oldY = playerY;
+        boolean facingRight = true;
 
         stateTime += Gdx.graphics.getDeltaTime();
 
@@ -88,12 +89,14 @@ public class Main extends ApplicationAdapter {
 
         if(Gdx.input.isKeyPressed(Input.Keys.D) && playerX < 5000) {
             playerX += speed * delta;
+            facingRight = true;
             System.out.println("PlayerX: " + playerX + " | CameraX: " + camera.position.x);
 
         }
 
         if(Gdx.input.isKeyPressed(Input.Keys.A) && playerX > 23) {
             playerX -= speed * delta;
+            facingRight = false;
             System.out.println(playerX);
         }
 
@@ -121,16 +124,10 @@ public class Main extends ApplicationAdapter {
             currentFrame = walkFrames[0]; // frame diam
         }
 
-        boolean facingRight = true;
 
-        if (Gdx.input.isKeyPressed(Input.Keys.D)) {
-            playerX += speed * delta;
-            facingRight = true;
-        }
-        if (Gdx.input.isKeyPressed(Input.Keys.A)) {
-            playerX -= speed * delta;
-            facingRight = false;
-        }
+
+
+
 
         TextureRegion frame = walkAnimation.getKeyFrame(stateTime, true);
 
@@ -182,7 +179,7 @@ public class Main extends ApplicationAdapter {
         shapeR.setProjectionMatrix(camera.combined);
         shapeR.begin(ShapeRenderer.ShapeType.Line);
         shapeR.setColor(Color.RED);
-        shapeR.rect(playerRect.x, playerRect.y, playerRect.width, playerRect.height);
+        shapeR.rect(playerRect.x + 168, playerRect.y + 30, playerRect.width - 5, playerRect.height + 22);
         shapeR.end();
     }
 
