@@ -3,12 +3,15 @@ package com.gdx;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.viewport.FitViewport;
@@ -32,10 +35,12 @@ public class Main extends ApplicationAdapter {
     TextureRegion[] walkFrames;
     Animation<TextureRegion> walkAnimation;
     float stateTime;
+    ShapeRenderer shapeR;
 
     @Override
     public void create() {
 
+        shapeR = new ShapeRenderer();
         playerRect = new Rectangle(playerX, playerY, 64, 128);
 
         batch = new SpriteBatch();
@@ -87,7 +92,7 @@ public class Main extends ApplicationAdapter {
 
         }
 
-        if(Gdx.input.isKeyPressed(Input.Keys.A) && playerX > -12) {
+        if(Gdx.input.isKeyPressed(Input.Keys.A) && playerX > 23) {
             playerX -= speed * delta;
             System.out.println(playerX);
         }
@@ -130,9 +135,9 @@ public class Main extends ApplicationAdapter {
         TextureRegion frame = walkAnimation.getKeyFrame(stateTime, true);
 
 // Flip sprite kalau ke kiri
-        if ((facingRight && frame.isFlipX()) || (!facingRight && !frame.isFlipX())) {
-            frame.flip(true, false);
-        }
+        if (facingRight && frame.isFlipX()) frame.flip(true, false);
+        if (!facingRight && !frame.isFlipX()) frame.flip(true, false);
+
 
 
 
@@ -167,9 +172,18 @@ public class Main extends ApplicationAdapter {
             batch.draw(grassText, i, 0, 22, 22);
         }
 
-        batch.draw(currentFrame, playerX, playerY, 1920 / 3f, 923 / 3f);
+        float scale = 0.2f; // 30% dari ukuran aslinya
+        batch.draw(currentFrame, playerX, playerY,
+            (currentFrame.getRegionWidth() * scale),
+            (currentFrame.getRegionHeight() * scale));
+
 
         batch.end();
+        shapeR.setProjectionMatrix(camera.combined);
+        shapeR.begin(ShapeRenderer.ShapeType.Line);
+        shapeR.setColor(Color.RED);
+        shapeR.rect(playerRect.x, playerRect.y, playerRect.width, playerRect.height);
+        shapeR.end();
     }
 
     @Override
