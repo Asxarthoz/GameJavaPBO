@@ -31,18 +31,24 @@ public class Main extends ApplicationAdapter {
     Rectangle playerRect;
     float velocityY = 0;
     boolean isGround = true;
+    boolean isAttack = false;
+    boolean facingRight = true;
+    float attTime = 0f;
     Viewport viewport;
     TextureRegion[] walkFrames;
+    TextureRegion[] attFrames;
     Animation<TextureRegion> walkAnimation;
+    Animation<TextureRegion> attAnimation;
     float stateTime;
     ShapeRenderer shapeR;
+    Texture attackText;
 
     @Override
     public void create() {
 
         shapeR = new ShapeRenderer();
         playerRect = new Rectangle(playerX, playerY, 64, 128);
-
+        attackText = new Texture("attackSpriteC.png");
         batch = new SpriteBatch();
         playerText = new Texture("player_walk.png");
         int frameCols = 7;
@@ -51,7 +57,12 @@ public class Main extends ApplicationAdapter {
         TextureRegion[][] tmp = TextureRegion.split(
             playerText,
             playerText.getWidth() / frameCols,
-            playerText.getHeight() / frameRows
+            playerText.getHeight()
+        );
+        TextureRegion[][] tmpAtt = TextureRegion.split(
+            attackText,
+            attackText.getWidth() / 5,
+            attackText.getHeight()
         );
 
         camera = new OrthographicCamera();
@@ -62,8 +73,13 @@ public class Main extends ApplicationAdapter {
         for (int i = 0; i < frameCols; i++) {
             walkFrames[i] = tmp[0][i];
         }
+        attFrames = new TextureRegion[5];
+        for (int i = 0; i < 5; i++) {
+            attFrames[i] = tmpAtt[0][i];
+        }
 
         walkAnimation = new Animation<TextureRegion>(0.1f, walkFrames);
+        attAnimation = new Animation<TextureRegion>(0.1f, attFrames);
         stateTime = 0f;
 
 
@@ -75,28 +91,25 @@ public class Main extends ApplicationAdapter {
 
     @Override
     public void render() {
+        ScreenUtils.clear(0, 0, 0, 1);
         float oldX = playerX;
         float oldY = playerY;
-        boolean facingRight = true;
 
-        stateTime += Gdx.graphics.getDeltaTime();
-
-        // Ambil frame berdasarkan waktu
-        TextureRegion currentFrame = walkAnimation.getKeyFrame(stateTime, true);
-
-        ScreenUtils.clear(0.15f, 0.15f, 0.2f, 1f);
         float delta = Gdx.graphics.getDeltaTime();
+        stateTime += delta;
+        boolean gerak = false;
 
         if(Gdx.input.isKeyPressed(Input.Keys.D) && playerX < 5000) {
             playerX += speed * delta;
             facingRight = true;
             System.out.println("PlayerX: " + playerX + " | CameraX: " + camera.position.x);
-
+            gerak = true;
         }
 
         if(Gdx.input.isKeyPressed(Input.Keys.A) && playerX > 23) {
             playerX -= speed * delta;
             facingRight = false;
+            gerak = true;
             System.out.println(playerX);
         }
 
@@ -117,23 +130,34 @@ public class Main extends ApplicationAdapter {
             speed = 200;
         }
 
-        if (Gdx.input.isKeyPressed(Input.Keys.D) || Gdx.input.isKeyPressed(Input.Keys.A)) {
-            stateTime += Gdx.graphics.getDeltaTime();
-            currentFrame = walkAnimation.getKeyFrame(stateTime, true);
-        } else {
-            currentFrame = walkFrames[0]; // frame diam
+        if(Gdx.input.isButtonJustPressed(Input.Buttons.LEFT) && !isAttack) {
+            isAttack = true;
+            attTime = 0f;
         }
 
 
-
+        TextureRegion currentFrame;
+        if (isAttack) {
+            attTime += delta;
+            currentFrame = attAnimation.getKeyFrame(attTime, false);
+            if (attAnimation.isAnimationFinished(attTime)) {
+                isAttack = false;
+                attTime = 0f;
+            }
+        } else if (gerak) {
+            currentFrame = walkAnimation.getKeyFrame(stateTime, true);
+        } else {
+            currentFrame = walkFrames[0];
+        }
 
 
 
         TextureRegion frame = walkAnimation.getKeyFrame(stateTime, true);
 
-// Flip sprite kalau ke kiri
-        if (facingRight && frame.isFlipX()) frame.flip(true, false);
-        if (!facingRight && !frame.isFlipX()) frame.flip(true, false);
+        // buat ngadep kanan kiri
+        if (facingRight && currentFrame.isFlipX()) currentFrame.flip(true, false);
+        if (!facingRight && !currentFrame.isFlipX()) currentFrame.flip(true, false);
+
 
 
 
@@ -194,5 +218,7 @@ public class Main extends ApplicationAdapter {
         batch.dispose();
         playerText.dispose();
         grassText.dispose();
+        attackText.dispose();
+        shapeR.dispose();
     }
 }
