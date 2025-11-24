@@ -3,207 +3,310 @@ package com.gdx;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.*;
 import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.GL20;
-import com.badlogic.gdx.graphics.OrthographicCamera;
-import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.g2d.Animation;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
-import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
-import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.ScreenUtils;
+import com.badlogic.gdx.utils.TimeUtils;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
+
+enum GameState {
+    EXPLORE,
+    DIALOG,
+    GAMEOVER,
+    VICTORY
+}
+
 
 
 /** {@link com.badlogic.gdx.ApplicationListener} implementation shared by all platforms. */
 public class Main extends ApplicationAdapter {
-    private SpriteBatch batch;
-    private Texture playerText, grassText;
-    OrthographicCamera camera;
 
-    float playerX = 100, playerY = 100;
-    float speed = 200f;
-    int stamina = 1000;
-    int gravity = -800;
-    Rectangle playerRect;
-    float velocityY = 0;
-    boolean isGround = true;
-    boolean isAttack = false;
-    boolean facingRight = true;
-    float attTime = 0f;
+    GameState currentState = GameState.DIALOG;
+    static final float scale = 0.2f;
+    private SpriteBatch batch;
+    OrthographicCamera camera;
+    Texture background;
+    float bgWidth;
+    Array<Enemy> enemies = new Array<>();
+
+    Player player;
+    NPC npc;
+
+    Array<Bullet> bullets;
+    Texture bulletTexture;
+    TextureRegion bulletRegion;
     Viewport viewport;
-    TextureRegion[] walkFrames;
-    TextureRegion[] attFrames;
-    Animation<TextureRegion> walkAnimation;
-    Animation<TextureRegion> attAnimation;
+
+    int dialogIndex = 0;
     float stateTime;
     ShapeRenderer shapeR;
-    Texture attackText;
+    BitmapFont font;
+
+    String[] dialogList = {
+        "Para penjajah berusaha merebut tanah kita.",
+        "Jaga tanah ini dengan sepenuh hatimu!",
+        "Jangan pernah gentar meskipun nyawa taruhannya!"
+    };
 
     @Override
     public void create() {
 
-        shapeR = new ShapeRenderer();
-        playerRect = new Rectangle(playerX, playerY, 64, 128);
-        attackText = new Texture("attackSpriteC.png");
         batch = new SpriteBatch();
-        playerText = new Texture("player_walk.png");
-        int frameCols = 7;
-        int frameRows = 1;
+        player = new Player(100, 0, new Texture("sprite.png"), new Texture("sprite.png"));
+        background = new Texture("bg.png");
+        bgWidth = background.getWidth();
+        background.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.ClampToEdge);
 
-        TextureRegion[][] tmp = TextureRegion.split(
-            playerText,
-            playerText.getWidth() / frameCols,
-            playerText.getHeight()
-        );
-        TextureRegion[][] tmpAtt = TextureRegion.split(
-            attackText,
-            attackText.getWidth() / 5,
-            attackText.getHeight()
-        );
+        // ukuran karakter sebenarnya
+        int charX = 750;
+        int charY = 410;
+        int charW = 585;
+        int charH = 920;
+
+        shapeR = new ShapeRenderer();
+
+        //bikin bullet
+        bullets = new Array<>();
+        bulletTexture = new Texture("bullet.png");
+        bulletRegion = new TextureRegion(bulletTexture);
+
+        font = new BitmapFont();
+        npc = new NPC(-200, -100, new Texture("sprite.png"));
+        npc.startEnter();
 
         camera = new OrthographicCamera();
         viewport = new FitViewport(960, 540, camera);
-        grassText = new Texture("grass.jpg");
 
-        walkFrames = new TextureRegion[frameCols];
-        for (int i = 0; i < frameCols; i++) {
-            walkFrames[i] = tmp[0][i];
-        }
-        attFrames = new TextureRegion[5];
-        for (int i = 0; i < 5; i++) {
-            attFrames[i] = tmpAtt[0][i];
-        }
-
-        walkAnimation = new Animation<TextureRegion>(0.1f, walkFrames);
-        attAnimation = new Animation<TextureRegion>(0.1f, attFrames);
         stateTime = 0f;
 
+        for (int i = 0; i < 4; i++) {
+            enemies.add(new Enemy(1200 + i * 150, 0, new Texture("enemy.png"), 0.4f));
+        }
 
 
         camera.update();
-
-
     }
 
     @Override
     public void render() {
         ScreenUtils.clear(0, 0, 0, 1);
-        float oldX = playerX;
-        float oldY = playerY;
 
         float delta = Gdx.graphics.getDeltaTime();
         stateTime += delta;
-        boolean gerak = false;
 
-        if(Gdx.input.isKeyPressed(Input.Keys.D) && playerX < 5000) {
-            playerX += speed * delta;
-            facingRight = true;
-            System.out.println("PlayerX: " + playerX + " | CameraX: " + camera.position.x);
-            gerak = true;
-        }
-
-        if(Gdx.input.isKeyPressed(Input.Keys.A) && playerX > 23) {
-            playerX -= speed * delta;
-            facingRight = false;
-            gerak = true;
-            System.out.println(playerX);
-        }
-
-        if(Gdx.input.isKeyPressed(Input.Keys.W) && playerY < 355 && isGround) {
-            velocityY = 400;
-            isGround = false;
-            System.out.println(playerY);
-        }
-
-        if(Gdx.input.isKeyPressed(Input.Keys.S) && playerY > 0) {
-//            playerY -= speed * 4 * delta;
-            System.out.println(playerY);
-        }
-
-        if(Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {
-            speed = 550;
+        if (currentState == GameState.DIALOG) {
+            player.updateDialog(delta);
+            npc.update(delta);     // NPC bergerak hanya saat dialog
         } else {
-            speed = 200;
-        }
+            player.update(delta);         // normal
+            npc.update(delta);
 
-        if(Gdx.input.isButtonJustPressed(Input.Buttons.LEFT) && !isAttack) {
-            isAttack = true;
-            attTime = 0f;
-        }
-
-
-        TextureRegion currentFrame;
-        if (isAttack) {
-            attTime += delta;
-            currentFrame = attAnimation.getKeyFrame(attTime, false);
-            if (attAnimation.isAnimationFinished(attTime)) {
-                isAttack = false;
-                attTime = 0f;
+            for (Enemy e : enemies) {
+                e.update(delta, player.hitbox);
             }
-        } else if (gerak) {
-            currentFrame = walkAnimation.getKeyFrame(stateTime, true);
-        } else {
-            currentFrame = walkFrames[0];
+
+        }
+
+        for (Enemy e : enemies) {
+            if (e.canShoot()) {
+                shootFromEnemy(e);
+            }
+        }
+
+        if (currentState == GameState.DIALOG) {
+
+            // Klik untuk next dialog
+            if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
+                dialogIndex++;
+
+                // Kalau dialog selesai
+                if (dialogIndex >= dialogList.length) {
+
+                    npc.startLeave();      // NPC mundur
+
+                    currentState = GameState.EXPLORE;
+                }
+            }
+        }
+
+        if (player.isAttack) {
+            Rectangle atk = player.getAttackHitbox();
+
+            if (atk != null && !player.hitRegistered) {
+
+                for (Enemy e : enemies) {
+                    if (!e.dead && atk.overlaps(e.hitbox)) {
+                        e.takeDamage(30);
+
+                        player.hitRegistered = true;   // <=== hanya kena sekali
+                        break;                         // hentikan loop
+                    }
+                }
+            }
         }
 
 
-
-        TextureRegion frame = walkAnimation.getKeyFrame(stateTime, true);
-
-        // buat ngadep kanan kiri
-        if (facingRight && currentFrame.isFlipX()) currentFrame.flip(true, false);
-        if (!facingRight && !currentFrame.isFlipX()) currentFrame.flip(true, false);
-
-
-
-
-
-        velocityY += gravity * delta;
-        playerY += velocityY * delta;
-
-        //cek tabrakan ke tembok
-        playerRect.setPosition(playerX, playerY);
-
-
-        if(playerY <= 0) {
-            playerY = 0;
-            velocityY = 0;
-            isGround = true;
+        for (int i = enemies.size - 1; i >= 0; i--) {
+            if (enemies.get(i).dead && enemies.get(i).deathTime >= 1f) {
+                enemies.removeIndex(i);
+            }
         }
 
-        camera.position.x = playerX + 64 / 2;
+
+        camera.position.x = player.x + player.hitbox.width / 2;
         float halfW = viewport.getWorldWidth() / 2f;
-        float worldWidth = 5000; // sesuai panjang dunia (rumput)
+        float worldWidth = 5000;
         if (camera.position.x < halfW) camera.position.x = halfW;
         if (camera.position.x > worldWidth - halfW) camera.position.x = worldWidth - halfW;
 
         camera.update();
 
-        batch.setProjectionMatrix(camera.combined);
+        for (int i = bullets.size - 1; i >= 0; i--) {
+            Bullet b = bullets.get(i);
 
+            b.rect.x += b.velX * delta;
+            b.rect.y += b.velY * delta;
 
+            // kena player?
+            if (b.rect.overlaps(player.hitbox)) {
+                if(player.health > 0) {
+                    player.health -= 10;
+                    bullets.removeIndex(i);
+                    continue;
+                }
 
-        batch.begin();
+            }
 
-        for(int i = 0; i < 5000; i+=22) {
-            batch.draw(grassText, i, 0, 22, 22);
+            // keluar layar
+            if (b.rect.x < 0 || b.rect.x > 5000 || b.rect.y < 0 || b.rect.y > 2000) {
+                bullets.removeIndex(i);
+            }
         }
 
-        float scale = 0.2f; // 30% dari ukuran aslinya
-        batch.draw(currentFrame, playerX, playerY,
-            (currentFrame.getRegionWidth() * scale),
-            (currentFrame.getRegionHeight() * scale));
+
+        batch.setProjectionMatrix(camera.combined);
+        batch.begin();
+
+        float camLeft = camera.position.x - viewport.getWorldWidth() / 2;
+
+// posisi background mengikuti kamera
+        float bgX = -(camLeft % bgWidth);
+
+        batch.draw(background, 0, 0);
+        batch.draw(background, 2048, 0);
+        batch.draw(background, 4096, 0);
+
+        TextureRegion frame = player.getFrame();
+        batch.draw(frame, player.x, player.y,
+            frame.getRegionWidth() * scale,
+            frame.getRegionHeight() * scale);
+
+        for (Enemy e : enemies) {
+            batch.draw(
+                e.getSprite(),
+                e.x, e.y - 30,
+                85, 125,          // originX, originY
+                170, 250,         // width height
+                1, 1,             // scaleX, scaleY
+                e.dead ? e.rotation : 0   // rotate kalau mati
+            );
+        }
+
+        for (Bullet b : bullets) {
+            batch.draw(
+                bulletRegion,
+                b.rect.x, b.rect.y,
+                b.rect.width / 2, b.rect.height / 2,   // origin rotasi
+                b.rect.width + 30, b.rect.height + 30,
+                1, 1,
+                b.rotation                              // rotasi derajat
+            );
+        }
+
+        TextureRegion npcFrame = npc.getFrame();
+
+        batch.draw(
+            npcFrame,
+            npc.x,
+            npc.y-21,
+            npcFrame.getRegionWidth() * 0.2f,
+            npcFrame.getRegionHeight() * 0.2f
+        );
+
 
 
         batch.end();
+
+
+        shapeR.setProjectionMatrix(camera.combined);
+        shapeR.begin(ShapeRenderer.ShapeType.Filled);
+        shapeR.setColor(Color.RED);
+
+// HEALTH BAR
+        for (Enemy e : enemies) {
+            shapeR.rect(
+                e.hitbox.x,
+                e.hitbox.y + e.hitbox.height + 10,
+                100 * (e.hp / e.maxHp),
+                10
+            );
+        }
+
+
+        shapeR.rect(
+            player.hitbox.x,
+            player.hitbox.y + player.hitbox.height + 10,
+            100 * (player.health / player.MAX_HEALTH),
+            10
+        );
+
+        shapeR.end();
+
+        if (currentState == GameState.DIALOG) {
+            // kasih background hitam semi transparan
+            shapeR.begin(ShapeRenderer.ShapeType.Filled);
+            shapeR.setColor(0, 0, 0, 0.5f);
+            shapeR.rect(
+                camera.position.x - viewport.getWorldWidth()/2 + 20,
+                camera.position.y - viewport.getWorldHeight()/2 - 40,
+                920, 100
+            );
+            shapeR.end();
+
+            batch.begin();
+            font.setColor(Color.WHITE);
+            font.draw(
+                batch,
+                dialogList[dialogIndex],
+                camera.position.x - viewport.getWorldWidth()/2 + 40,
+                camera.position.y - viewport.getWorldHeight()/2 + 40
+            );
+            batch.end();
+
+        }
+
+
+        //ini buat bikin kotak buat debugging posisi karakter
         shapeR.setProjectionMatrix(camera.combined);
         shapeR.begin(ShapeRenderer.ShapeType.Line);
         shapeR.setColor(Color.RED);
-        shapeR.rect(playerRect.x + 168, playerRect.y + 30, playerRect.width - 5, playerRect.height + 22);
+        shapeR.rect(player.hitbox.x, player.hitbox.y, player.hitbox.width, player.hitbox.height);
+
+        shapeR.end();
+
+        shapeR.begin(ShapeRenderer.ShapeType.Line);
+        shapeR.setColor(Color.RED);
+
+// hitbox player
+// hitbox enemy
+
         shapeR.end();
     }
 
@@ -212,13 +315,39 @@ public class Main extends ApplicationAdapter {
         viewport.update(width, height, true);
     }
 
-    @Override
-    public void dispose() {
+    void shootFromEnemy(Enemy e) {
 
+        float startX = e.hitbox.x + e.hitbox.width / 2;
+        if(e.facingRight) {
+            startX += 30;
+        } else {
+            startX -= 130;
+        }
+        float startY = e.hitbox.y + e.hitbox.height / 2 - 25;
+
+        float targetX = player.hitbox.x + player.hitbox.width / 2;
+
+        float bulletSpeed = 500f;
+
+        // arah kiri/kanan
+        float velX = (targetX > startX) ? bulletSpeed : -bulletSpeed;
+        float velY = 0;
+
+        Bullet bullet = new Bullet(
+            startX, startY,
+            20, 20,
+            velX, velY);
+
+        bullet.rotation = (velX < 0) ? 0 : 180;
+
+        bullets.add(bullet);
+
+        e.lastShootTime = TimeUtils.nanoTime();
+    }
+
+    @Override
+    public void dispose() { // ini fungsi buat ngehapus texture biar ga ngebug
         batch.dispose();
-        playerText.dispose();
-        grassText.dispose();
-        attackText.dispose();
         shapeR.dispose();
     }
 }
