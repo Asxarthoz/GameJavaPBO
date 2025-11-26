@@ -9,7 +9,7 @@ import com.badlogic.gdx.math.Rectangle;
 
 /**
  * Player: movement, attack, and dash mechanics.
- * Comments focus on intent and tricky bits such as hitbox offsets and dash timing.
+ * Adapted to use separate Idle / Run / Attack sprite sheets.
  */
 public class Player {
 
@@ -28,11 +28,13 @@ public class Player {
     public boolean hitRegistered = false;
 
     public Rectangle hitbox;
-    float scale = 0.2f;
+    float playerScale = 2f;
 
-    Animation<TextureRegion> walkAnim;
+    Animation<TextureRegion> idleAnim;
+    Animation<TextureRegion> runAnim;
     Animation<TextureRegion> attackAnim;
-    TextureRegion[] walkFrames;
+    TextureRegion[] idleFrames;
+    TextureRegion[] runFrames;
     TextureRegion[] attackFrames;
 
     // DASH system (seconds)
@@ -40,49 +42,71 @@ public class Player {
     float dashTime = 0f;
     float dashDuration = 0.15f; // short burst
     float dashSpeed = 900f;
-    float dashCooldown = 3f;    // 3 seconds cooldown as requested
+    float dashCooldown = 3f;    // 3 seconds cooldown
     float dashCooldownTimer = 0f;
 
     float stateTime = 0f;
 
-    public Player(float x, float y, Texture spriteSheet, Texture attackSheet) {
+    /**
+     * Constructor menggunakan 3 sheet terpisah: idle, run, attack.
+     * Contoh path file yang kamu upload:
+     * /mnt/data/Idle-Sheet.png
+     * /mnt/data/Run-Sheet.png
+     * /mnt/data/Attack-01-Sheet.png
+     *
+     * Jika jumlah kolom/frame berbeda dari asumsi di bawah, ubah konstanta IDLE_COLS/RUN_COLS/ATTACK_COLS.
+     */
+    public Player(float x, float y, Texture idleSheet, Texture runSheet, Texture attackSheet) {
         this.x = x;
         this.y = y;
 
-        // character sub-rectangle (sheet contains multiple characters)
-        int charX = 750;
-        int charY = 410;
-        int charW = 585;
-        int charH = 920;
+        // -> Ubah angka ini bila sheet-mu memiliki jumlah kolom berbeda
+        final int IDLE_COLS = 4;   // asumsi: Idle sheet 4 frame
+        final int RUN_COLS  = 10;   // asumsi: Run sheet 10 frame
+        final int ATTACK_COLS = 8; // asumsi: Attack sheet 8 frame
+        final int ROWS = 1;        // semua sheet 1 row (ubah bila berbeda)
 
-        int frameCols = 7;
-        int frameRows = 2;
-        int frameWidth = spriteSheet.getWidth() / frameCols;
-        int frameHeight = spriteSheet.getHeight() / frameRows;
-        TextureRegion[][] tmp = TextureRegion.split(spriteSheet, frameWidth, frameHeight);
-
-        walkFrames = new TextureRegion[7];
-        attackFrames = new TextureRegion[7];
-        for (int i = 0; i < 7; i++) {
-            // extract consistent sub-rectangle for player visuals
-            walkFrames[i] = new TextureRegion(tmp[1][i], charX, charY, charW, charH);
-            attackFrames[i] = new TextureRegion(tmp[0][i], charX, charY, charW, charH);
+        // --- Idle frames ---
+        int idleFrameW = idleSheet.getWidth() / IDLE_COLS;
+        int idleFrameH = idleSheet.getHeight() / ROWS;
+        TextureRegion[][] idleTmp = TextureRegion.split(idleSheet, idleFrameW, idleFrameH);
+        idleFrames = new TextureRegion[IDLE_COLS];
+        for (int i = 0; i < IDLE_COLS; i++) {
+            idleFrames[i] = idleTmp[0][i];
         }
+        idleAnim = new Animation<TextureRegion>(0.15f, idleFrames); // lambat untuk idle
 
-        walkAnim = new Animation<TextureRegion>(0.1f, walkFrames);
-        attackAnim = new Animation<TextureRegion>(0.1f, attackFrames);
+        // --- Run frames ---
+        int runFrameW = runSheet.getWidth() / RUN_COLS;
+        int runFrameH = runSheet.getHeight() / ROWS;
+        TextureRegion[][] runTmp = TextureRegion.split(runSheet, runFrameW, runFrameH);
+        runFrames = new TextureRegion[RUN_COLS];
+        for (int i = 0; i < RUN_COLS; i++) {
+            runFrames[i] = runTmp[0][i];
+        }
+        runAnim = new Animation<TextureRegion>(0.08f, runFrames); // cepat untuk lari
 
-        // Hitbox uses a trimmed size relative to frame to match visuals
-        hitbox = new Rectangle(x, y, walkFrames[0].getRegionWidth() * scale - 60, walkFrames[0].getRegionHeight() * scale - 30);
+        // --- Attack frames ---
+        int attackFrameW = attackSheet.getWidth() / ATTACK_COLS;
+        int attackFrameH = attackSheet.getHeight() / ROWS;
+        TextureRegion[][] attackTmp = TextureRegion.split(attackSheet, attackFrameW, attackFrameH);
+        attackFrames = new TextureRegion[ATTACK_COLS];
+        for (int i = 0; i < ATTACK_COLS; i++) {
+            attackFrames[i] = attackTmp[0][i];
+        }
+        attackAnim = new Animation<TextureRegion>(0.06f, attackFrames); // trim/tempo animasi serangan
+
+        // Hitbox: gunakan ukuran frame run (umumnya mewakili postur berjalan)
+        float hbWidth = runFrames[0].getRegionWidth() * playerScale - 60;  // offset kecil untuk menyesuaikan bentuk
+        float hbHeight = runFrames[0].getRegionHeight() * playerScale - 30;
+        if (hbWidth < 10) hbWidth = runFrames[0].getRegionWidth() * playerScale * 0.6f; // fallback aman
+        if (hbHeight < 10) hbHeight = runFrames[0].getRegionHeight() * playerScale * 0.6f;
+        hitbox = new Rectangle(x, y, hbWidth, hbHeight);
     }
 
     /**
-     * Main update handles:
-     * - movement inputs (A/D)
-     * - jump (W)
-     * - sprint (Shift)
-     * - dash (Space) with cooldown timer in seconds (frame-rate independent)
-     * - attack (mouse left button)
+     * update: movement, jump, sprint, dash, attack.
+     * Delta dipakai untuk independensi frame rate.
      */
     public void update(float delta) {
         stateTime += delta;
@@ -98,7 +122,7 @@ public class Player {
         // Sprint (temporary speed increase)
         if (Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) speed = 550; else speed = 200;
 
-        // Dash cooldown timer (counts down independently of frame rate)
+        // Dash cooldown timer (counts down)
         dashCooldownTimer -= delta;
         if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE) && dashCooldownTimer <= 0 && !isDashing) {
             isDashing = true;
@@ -110,7 +134,7 @@ public class Player {
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT) && !isAttack) {
             isAttack = true;
             attackTime = 0f;
-            hitRegistered = false; // allow next attack to register hits again
+            hitRegistered = false;
         }
 
         // Attack animation lifecycle
@@ -138,20 +162,23 @@ public class Player {
         y += velocityY * delta;
         if (y <= 0) { y = 0; velocityY = 0; isGround = true; }
 
-        // Update hitbox position (offset so sprite anchor aligns)
+        // Update hitbox position (offset agar anchor sprite sesuai)
         hitbox.setPosition(x + 20, y);
     }
 
     /**
-     * Returns a TextureRegion ready to draw.
-     * We copy the region to avoid mutating the shared frame array when flipping.
+     * Mengembalikan frame yang siap digambar sesuai state:
+     * - attackAnim saat menyerang
+     * - runAnim saat menekan A/D
+     * - idleAnim saat tidak bergerak
+     *
+     * Membuat salinan TextureRegion supaya flip tidak merusak array asli.
      */
     public TextureRegion getFrame() {
         TextureRegion rawFrame;
-        TextureRegion idle = walkFrames[0];
         if (isAttack) rawFrame = attackAnim.getKeyFrame(attackTime, false);
-        else if (Gdx.input.isKeyPressed(Input.Keys.A) || Gdx.input.isKeyPressed(Input.Keys.D)) rawFrame = walkAnim.getKeyFrame(stateTime, true);
-        else rawFrame = idle;
+        else if (Gdx.input.isKeyPressed(Input.Keys.A) || Gdx.input.isKeyPressed(Input.Keys.D)) rawFrame = runAnim.getKeyFrame(stateTime, true);
+        else rawFrame = idleAnim.getKeyFrame(stateTime, true);
 
         TextureRegion frame = new TextureRegion(rawFrame);
         if (facingRight && frame.isFlipX()) frame.flip(true, false);
@@ -164,7 +191,7 @@ public class Player {
         stateTime += delta;
     }
 
-    // Attack hitbox is a short rectangle in front of the player. Facing affects side.
+    // Attack hitbox adalah rectangle pendek di depan player. Facing mempengaruhi sisi.
     public Rectangle getAttackHitbox() {
         if (!isAttack) return null;
         float attackWidth = 60;

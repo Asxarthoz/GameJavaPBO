@@ -34,6 +34,7 @@ public class Main extends ApplicationAdapter {
 
     // ---------- constants ----------
     private static final float GLOBAL_SCALE = 0.2f; // uniform scale for character frames
+    private static final float PLAYER_SCALE = 2.0f;
     private static final int WORLD_WIDTH = 5000;    // clamp camera movement
     private static final int WORLD_HEIGHT = 2000;
     private static final int V_WIDTH = 800;
@@ -54,7 +55,10 @@ public class Main extends ApplicationAdapter {
     // Assets loaded once for reuse (avoid reloading textures per spawn)
     private Texture background;
     private Texture enemyTexture;
-    private Texture playerSheet;
+//    private Texture playerSheet;
+    private Texture playerIdle;
+    private Texture playerRun;
+    private Texture playerAttack;
     private Texture npcSheet;
     private Texture bulletTexture;
     private TextureRegion bulletRegion;
@@ -86,7 +90,11 @@ public class Main extends ApplicationAdapter {
         // Load textures once and reuse them (performance & memory)
         background = new Texture("bg.png");
         enemyTexture = new Texture("enemy.png");
-        playerSheet = new Texture("sprite.png");
+//        playerSheet = new Texture("sprite.png");
+        playerIdle = new Texture("Character/Idle/Idle-Sheet.png");
+//        playerRun = new Texture("Character/Run/Run-Sheet.png");
+        playerRun = new Texture("_Run.png");
+        playerAttack = new Texture("Character/Attack-01/Attack-01-Sheet.png");
         npcSheet = new Texture("sprite.png");
         bulletTexture = new Texture("bullet.png");
         bulletRegion = new TextureRegion(bulletTexture);
@@ -97,7 +105,7 @@ public class Main extends ApplicationAdapter {
         viewport = new ExtendViewport(V_WIDTH, V_HEIGHT, camera);
 
         // Create main actor and NPC
-        player = new Player(100, 0, playerSheet, playerSheet);
+        player = new Player(100, -30, playerIdle, playerRun, playerAttack);
         npc = new NPC(-200, -100, npcSheet);
         npc.startEnter();
 
@@ -228,7 +236,7 @@ public class Main extends ApplicationAdapter {
 
         // Player sprite (scaled)
         TextureRegion frame = player.getFrame();
-        batch.draw(frame, player.x, player.y, frame.getRegionWidth() * GLOBAL_SCALE, frame.getRegionHeight() * GLOBAL_SCALE);
+        batch.draw(frame, player.x, player.y, frame.getRegionWidth() * PLAYER_SCALE, frame.getRegionHeight() * PLAYER_SCALE);
 
         // Enemies: use their getSprite() and properties for rotation when dead
         for (Enemy e : enemies) {
@@ -331,7 +339,10 @@ public class Main extends ApplicationAdapter {
 
         background.dispose();
         enemyTexture.dispose();
-        playerSheet.dispose();
+        playerAttack.dispose();
+        playerRun.dispose();
+        playerIdle.dispose();
+//        playerSheet.dispose();
         npcSheet.dispose();
         bulletTexture.dispose();
     }
