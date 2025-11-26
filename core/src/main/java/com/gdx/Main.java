@@ -115,7 +115,13 @@ public class Main extends ApplicationAdapter {
         enemies.clear();
         TextureRegion enemyRegion = new TextureRegion(enemyTexture);
         for (int i = 0; i < WAVE_SIZE; i++) {
-            int x = rand.nextInt(2001); // inclusive 0..2000
+            int x;
+            if(killCount == 0) {
+                x = rand.nextInt(1001) + 1000;
+            } else {
+                x = rand.nextInt(2001); // inclusive 0..2000
+            }
+
             int y = 0;
             float scale = 0.4f;
             enemies.add(new Enemy(x, y, enemyRegion, scale));
