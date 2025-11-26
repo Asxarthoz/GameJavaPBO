@@ -220,11 +220,11 @@ public class Main extends ApplicationAdapter {
         batch.begin();
 
         // Background tiling relative to camera
-        float camLeft = camera.position.x - viewport.getWorldWidth() / 2;
-        float bgX = -(camLeft % background.getWidth());
-        batch.draw(background, bgX, 0);
-        batch.draw(background, bgX + background.getWidth(), 0);
-        batch.draw(background, bgX + 2 * background.getWidth(), 0);
+//        float camLeft = camera.position.x - viewport.getWorldWidth() / 2;
+//        float bgX = -(camLeft % background.getWidth());
+        batch.draw(background, 0, 0);
+        batch.draw(background,  background.getWidth(), 0);
+        batch.draw(background, 2 * background.getWidth(), 0);
 
         // Player sprite (scaled)
         TextureRegion frame = player.getFrame();
