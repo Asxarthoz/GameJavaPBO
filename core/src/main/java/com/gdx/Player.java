@@ -8,8 +8,7 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Rectangle;
 
 /**
- * Player: movement, attack, and dash mechanics.
- * Comments focus on intent and tricky bits such as hitbox offsets and dash timing.
+ * Player: movement, attack, shield, dash, and heal mechanics.
  */
 public class Player {
 
@@ -27,6 +26,13 @@ public class Player {
     public float attackTime = 0f;
     public boolean hitRegistered = false;
 
+    // --- SHIELD VARIABLES ---
+    public boolean isShielding = false;
+
+    // --- HEAL VARIABLES ---
+    public float healTimer = 0f;          // Hitung mundur waktu heal
+    public float healCooldown = 5f;       // Cooldown 5 detik
+
     public Rectangle hitbox;
     float scale = 0.2f;
 
@@ -35,12 +41,12 @@ public class Player {
     TextureRegion[] walkFrames;
     TextureRegion[] attackFrames;
 
-    // DASH system (seconds)
+    // DASH system
     boolean isDashing = false;
     float dashTime = 0f;
-    float dashDuration = 0.15f; // short burst
+    float dashDuration = 0.15f;
     float dashSpeed = 900f;
-    float dashCooldown = 3f;    // 3 seconds cooldown as requested
+    float dashCooldown = 3f;
     float dashCooldownTimer = 0f;
 
     float stateTime = 0f;
@@ -49,7 +55,7 @@ public class Player {
         this.x = x;
         this.y = y;
 
-        // character sub-rectangle (sheet contains multiple characters)
+        // character sub-rectangle
         int charX = 750;
         int charY = 410;
         int charW = 585;
@@ -64,7 +70,6 @@ public class Player {
         walkFrames = new TextureRegion[7];
         attackFrames = new TextureRegion[7];
         for (int i = 0; i < 7; i++) {
-            // extract consistent sub-rectangle for player visuals
             walkFrames[i] = new TextureRegion(tmp[1][i], charX, charY, charW, charH);
             attackFrames[i] = new TextureRegion(tmp[0][i], charX, charY, charW, charH);
         }
@@ -72,36 +77,51 @@ public class Player {
         walkAnim = new Animation<TextureRegion>(0.1f, walkFrames);
         attackAnim = new Animation<TextureRegion>(0.1f, attackFrames);
 
-        // Hitbox uses a trimmed size relative to frame to match visuals
         hitbox = new Rectangle(x, y, walkFrames[0].getRegionWidth() * scale - 60, walkFrames[0].getRegionHeight() * scale - 30);
     }
 
-    /**
-     * Main update handles:
-     * - movement inputs (A/D)
-     * - jump (W)
-     * - sprint (Shift)
-     * - dash (Space) with cooldown timer in seconds (frame-rate independent)
-     * - attack (mouse left button)
-     */
     public void update(float delta) {
         stateTime += delta;
-        boolean moving = false;
 
-        // Horizontal movement input
-        if (Gdx.input.isKeyPressed(Input.Keys.D)) { x += speed * delta; facingRight = true; moving = true;
-        System.out.println(
-            "Player X : " + x
-        );}
-        if (Gdx.input.isKeyPressed(Input.Keys.A)) { x -= speed * delta; facingRight = false; moving = true; }
+        // --- HEAL LOGIC (TOMBOL H) ---
+        // Kurangi timer setiap frame
+        if (healTimer > 0) {
+            healTimer -= delta;
+        }
+
+        // Jika tekan H, timer habis, dan darah belum penuh
+        if (Gdx.input.isKeyJustPressed(Input.Keys.H)) {
+            if (healTimer <= 0 && health < MAX_HEALTH) {
+                health += 30;
+                if (health > MAX_HEALTH) health = MAX_HEALTH; // Mentok di 100
+                healTimer = healCooldown; // Set cooldown 5 detik
+                System.out.println("Healed! Current HP: " + health);
+            }
+        }
+        // -----------------------------
+
+        // --- SHIELD LOGIC ---
+        if (Gdx.input.isButtonPressed(Input.Buttons.RIGHT)) {
+            isShielding = true;
+        } else {
+            isShielding = false;
+            if (Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) speed = 550; else speed = 200;
+        }
+
+        // Movement
+        if (Gdx.input.isKeyPressed(Input.Keys.D)) {
+            x += speed * delta;
+            facingRight = true;
+        }
+        if (Gdx.input.isKeyPressed(Input.Keys.A)) {
+            x -= speed * delta;
+            facingRight = false;
+        }
 
         // Jump
         if (Gdx.input.isKeyPressed(Input.Keys.W) && isGround) { velocityY = 400; isGround = false; }
 
-        // Sprint (temporary speed increase)
-        if (Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) speed = 550; else speed = 200;
-
-        // Dash cooldown timer (counts down independently of frame rate)
+        // Dash cooldown
         dashCooldownTimer -= delta;
         if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE) && dashCooldownTimer <= 0 && !isDashing) {
             isDashing = true;
@@ -110,13 +130,13 @@ public class Player {
         }
 
         // Attack input
-        if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT) && !isAttack) {
+        if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT) && !isAttack && !isShielding) {
             isAttack = true;
             attackTime = 0f;
-            hitRegistered = false; // allow next attack to register hits again
+            hitRegistered = false;
         }
 
-        // Attack animation lifecycle
+        // Attack animation logic
         if (isAttack) {
             attackTime += delta;
             if (attackAnim.isAnimationFinished(attackTime)) {
@@ -127,28 +147,24 @@ public class Player {
             hitRegistered = false;
         }
 
-        // Dashing movement: short burst, blocks other movement during dash
+        // Dash execution
         if (isDashing) {
             dashTime += delta;
             if (facingRight) x += dashSpeed * delta; else x -= dashSpeed * delta;
             if (dashTime >= dashDuration) isDashing = false;
             hitbox.setPosition(x + 20, y);
-            return; // skip gravity & other movement while dashing
+            return;
         }
 
-        // Gravity and vertical movement
+        // Gravity
         velocityY += gravity * delta;
         y += velocityY * delta;
         if (y <= 0) { y = 0; velocityY = 0; isGround = true; }
 
-        // Update hitbox position (offset so sprite anchor aligns)
+        // Update hitbox
         hitbox.setPosition(x + 20, y);
     }
 
-    /**
-     * Returns a TextureRegion ready to draw.
-     * We copy the region to avoid mutating the shared frame array when flipping.
-     */
     public TextureRegion getFrame() {
         TextureRegion rawFrame;
         TextureRegion idle = walkFrames[0];
@@ -162,12 +178,10 @@ public class Player {
         return frame;
     }
 
-    // Lightweight update used while dialog is active so animations still progress
     public void updateDialog(float delta) {
         stateTime += delta;
     }
 
-    // Attack hitbox is a short rectangle in front of the player. Facing affects side.
     public Rectangle getAttackHitbox() {
         if (!isAttack) return null;
         float attackWidth = 60;
@@ -176,7 +190,6 @@ public class Player {
         else return new Rectangle(hitbox.x - attackWidth, hitbox.y, attackWidth, attackHeight);
     }
 
-    // HUD helper: concise dash status for display
     public String getDashStatusString() {
         if (dashCooldownTimer <= 0f) return "DASH: READY";
         return String.format("DASH: cooldown %.1fs", dashCooldownTimer);
