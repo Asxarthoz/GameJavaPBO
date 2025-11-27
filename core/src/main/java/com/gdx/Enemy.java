@@ -1,187 +1,285 @@
-    package com.gdx;
+package com.gdx;
 
-    import com.badlogic.gdx.graphics.g2d.TextureRegion;
-    import com.badlogic.gdx.math.MathUtils;
-    import com.badlogic.gdx.math.Rectangle;
-    import com.badlogic.gdx.utils.TimeUtils;
+import com.badlogic.gdx.graphics.g2d.Animation;
+import com.badlogic.gdx.graphics.g2d.Batch;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.utils.TimeUtils;
 
-    /**
-     * Enemy AI and state.
-     * Hybrid comments: explain intent and non-obvious choices (patrol, chase delay, damage cooldown).
-     */
-    public class Enemy {
+public class Enemy extends Actor {
 
-        // Position and basic state (public for simple access from Main)
-        public float x, y;
-        public float hp = 100;
-        public float maxHp = 100;
+    public float hp = 100f;
+    public float maxHp = 100f;
 
-        // Death and removal
-        public boolean dead = false;  // set true in takeDamage when hp <= 0
-        public float deathTime = 0f;  // used to delay removal for death animation
-        public float rotation = 0f;   // visual rotation when dying
-        public long lastShootTime = 0;
+    public boolean dead = false;
+    public float deathTime = 0f;
+    public long lastShootTime = 0;
 
-        // Movement & facing
-        public float speed = 100;
-        public boolean facingRight = true;
+    public float speed = 80f;
+    public boolean facingRight = true;
 
-        // Rendering and collision
-        public TextureRegion sprite;
-        public Rectangle hitbox;
+    private Rectangle hitbox;
+    private float scale = 1.0f;
 
-        // Patrol & chase parameters
-        float patrolTargetX;
-        float patrolMinMove = 100;
-        float patrolMaxMove = 300;
+    // === ANIMASI ===
+    private Animation<TextureRegion> idleAnim;
+    private Animation<TextureRegion> walkAnim;
+    private Animation<TextureRegion> runAnim;
+    private Animation<TextureRegion> shootAnim;
+    private Animation<TextureRegion> dieAnim;
 
-        // Delay before starting chase when player detected (gives 'look' animation)
-        float detectDelay = 2f;
-        float delayTimer = 0f;
-        boolean detectedPlayer = false;
+    private float stateTime = 0f;
+    private EnemyState state = EnemyState.IDLE;
+    private EnemyState prevState = EnemyState.IDLE;
 
-        // Prevents rapid repeated damage
-        float damageCooldown = 0f;
+    // AI
+    private float patrolTargetX;
+    private float detectDelay = 1.0f; // bisa disesuaikan
+    private float delayTimer = 0f;
+    private boolean detectedPlayer = false;
+    private float damageCooldown = 0f;
+    private boolean countedKill = false;
 
-        // Ensure kill counted only once
-        private boolean countedKill = false;
+    private enum EnemyState {
+        IDLE, WALK, RUN, SHOOT, DIE
+    }
 
-        /**
-         * Constructor expects a TextureRegion and scale so sprite and hitbox match render size.
-         * Keeping scale out of Main gives better control per-enemy if desired later.
-         */
-        public Enemy(float x, float y, TextureRegion enemyRegion, float scale) {
-            this.x = x;
-            this.y = y;
-            this.sprite = enemyRegion;
-            this.maxHp = 100;
-            this.hp = maxHp;
-            float w = (sprite.getRegionWidth() * scale);
-            float h = sprite.getRegionHeight() * scale;
-            this.hitbox = new Rectangle(x, y, w, h);
-            pickNewPatrolTarget();
+    // SHOOT timing
+    private final float fireTime = 0.12f; // saat frame tembak melepaskan peluru (sesuaikan)
+    private boolean firedThisShot = false;
+
+    public Enemy(float startX, float startY,
+                 TextureRegion[] idleFrames,
+                 TextureRegion[] walkFrames,
+                 TextureRegion[] runFrames,
+                 TextureRegion[] shootFrames,
+                 TextureRegion[] dieFrames,
+                 float scale) {
+
+        this.scale = scale;
+        setPosition(startX, startY);
+
+        // Buat animasi
+        idleAnim   = new Animation<>(0.2f, idleFrames);
+        idleAnim.setPlayMode(Animation.PlayMode.LOOP);
+        walkAnim   = new Animation<>(0.08f, walkFrames);
+        walkAnim.setPlayMode(Animation.PlayMode.LOOP);
+        runAnim    = new Animation<>(0.08f, runFrames);
+        runAnim.setPlayMode(Animation.PlayMode.LOOP);
+        shootAnim  = new Animation<>(0.08f, shootFrames);
+        shootAnim.setPlayMode(Animation.PlayMode.NORMAL);
+        dieAnim    = new Animation<>(0.12f, dieFrames);
+        dieAnim.setPlayMode(Animation.PlayMode.NORMAL);
+
+        // Set size actor agar getWidth/getHeight valid
+        TextureRegion firstFrame = idleFrames[0];
+        float w = firstFrame.getRegionWidth() * scale;
+        float h = firstFrame.getRegionHeight() * scale;
+        setSize(w, h);
+
+        // Inisialisasi hitbox relatif terhadap getX/getY
+        hitbox = new Rectangle(getX() + getWidth() * 0.25f,
+                getY() + getHeight() * 0.001f,
+                getWidth() * 0.5f,
+                getHeight() * 0.75f);
+
+        // inisialisasi lastShootTime agar tidak langsung menembak
+        lastShootTime = TimeUtils.nanoTime();
+
+        pickNewPatrolTarget();
+    }
+
+    @Override
+    public void act(float delta) {
+        super.act(delta);
+        if (dead) {
+            deathTime += delta;
+            state = EnemyState.DIE;
+            return;
         }
 
-        // Choose a new random patrol endpoint near current x
-        private void pickNewPatrolTarget() {
-            float move = MathUtils.random(patrolMinMove, patrolMaxMove);
-            if (MathUtils.randomBoolean()) {
-                patrolTargetX = x + move;
-                facingRight = true;
+        // update waktu state
+        stateTime += delta;
+
+        Player player = findPlayer();
+        if (player == null) {
+            // tidak ada player di stage: patrol
+            state = EnemyState.WALK;
+            patrol(delta);
+            updateHitbox();
+            return;
+        }
+
+        // jarak ke player (center)
+        float dist = Math.abs(getCenterX() - (player.getHitbox().x + player.getHitbox().width/2f));
+
+        if (dist <= 450f) detectedPlayer = true;
+
+        if (detectedPlayer) {
+            delayTimer += delta;
+            if (delayTimer < detectDelay) {
+                state = EnemyState.IDLE;
             } else {
-                patrolTargetX = x - move;
-                facingRight = false;
-            }
-        }
-
-        /**
-         * Update enemy each frame.
-         * - If dead: increment deathTime (used by Main to remove after animation)
-         * - If player detected: wait for detectDelay then chase
-         * - Otherwise: patrol between random targets
-         */
-        public void update(float delta, Rectangle playerRect) {
-            if (dead) {
-                deathTime += delta;
-                return;
-            }
-
-            float centerEnemy = x + hitbox.width / 2;
-            float centerPlayer = playerRect.x + playerRect.width / 2;
-            float dist = Math.abs(centerEnemy - centerPlayer);
-            boolean playerInRange = dist <= 450;
-
-            if (playerInRange) detectedPlayer = true;
-
-            if (detectedPlayer) {
-                delayTimer += delta;
-                if (delayTimer < detectDelay) {
-                    // remain idle during detection delay so player can react
-                    hitbox.setPosition(x, y);
-                    return;
+                // jika dekat cukup untuk menembak -> berhenti di tempat dan mulai animasi SHOOT
+                if (dist <= 250f) {
+                    // Jika dalam radius menembak, berhenti; jika cooldown ready -> SHOOT, else tetap IDLE
+                    if (canShoot()) {
+                        if (state != EnemyState.SHOOT) {
+                            stateTime = 0f;
+                            firedThisShot = false;
+                        }
+                        state = EnemyState.SHOOT;
+                    } else {
+                        // cooldown belum selesai -> tetap diam (IDLE)
+                        state = EnemyState.IDLE;
+                    }
+                } else if (dist <= 600f) {
+                    // player agak jauh: kejar
+                    state = EnemyState.RUN;
+                    chasePlayer(player, delta);
+                } else {
+                    // player terlihat tapi jauh -> patrol (atau jalan)
+                    state = EnemyState.WALK;
+                    patrol(delta);
                 }
-                chasePlayer(playerRect, delta);
-            } else {
-                patrol(delta);
             }
-
-            if (damageCooldown > 0) damageCooldown -= delta;
-
-            // Keep sprite orientation consistent (flip if needed)
-            if (facingRight && sprite.isFlipX()) sprite.flip(true, false);
-            if (!facingRight && !sprite.isFlipX()) sprite.flip(true, false);
-
-            hitbox.setPosition(x, y);
+        } else {
+            state = EnemyState.WALK;
+            patrol(delta);
         }
 
-        // Simple horizontal chase: stops when close enough to avoid overlap
-        private void chasePlayer(Rectangle playerRect, float delta) {
-            float centerEnemy = x + hitbox.width / 2;
-            float centerPlayer = playerRect.x + playerRect.width / 2;
-            float distance = Math.abs(centerEnemy - centerPlayer);
-
-            if (distance <= 300f) return;
-
-            if (centerPlayer > centerEnemy-50) {
-                x += speed * delta;
-                facingRight = true;
-            } else {
-                x -= speed * delta;
-                facingRight = false;
+        // jika sedang dalam state SHOOT, cek apakah animasi sudah melewati titik fireTime
+        if (state == EnemyState.SHOOT) {
+            // tidak bergerak saat menembak (patrol/chase berhenti)
+            // setelah animasi SHOOT selesai, reset ke IDLE dan set lastShootTime
+            if (shootAnim.isAnimationFinished(stateTime)) {
+                stateTime = 0f;
+                state = EnemyState.IDLE;
+                lastShootTime = TimeUtils.nanoTime();
+                // setelah selesai, delayTimer tetap (biar tidak langsung reload)
             }
         }
 
-        // Patrol movement between random targets
-        private void patrol(float delta) {
-            if (facingRight) {
-                x += speed * delta;
-                if (x >= patrolTargetX) pickNewPatrolTarget();
-            } else {
-                x -= speed * delta;
-                if (x <= patrolTargetX) pickNewPatrolTarget();
-            }
-        }
+        if (damageCooldown > 0) damageCooldown -= delta;
 
-        public TextureRegion getSprite() {
-            return sprite;
-        }
+        updateHitbox();
+        prevState = state;
+    }
 
-        /**
-         * Can shoot only when detected and sufficient time passed since last shot.
-         * Also prevents shooting when dead.
-         */
-        public boolean canShoot() {
-            return detectedPlayer && TimeUtils.nanoTime() - lastShootTime > 2_000_000_000L && !dead;
-        }
+    private Player findPlayer() {
+        if (getStage() == null) return null;
+        Actor a = getStage().getRoot().findActor("player");
+        return (a instanceof Player) ? (Player) a : null;
+    }
 
-        /**
-         * Apply damage with a brief damageCooldown to avoid multi-hit in one frame.
-         * On death we set dead=true and begin death animation parameters.
-         */
-        public void takeDamage(float dmg) {
-            if (dead) return;
-            if (damageCooldown > 0) return;
-            damageCooldown = 0.35f;
-            hp -= dmg;
-            if (hp <= 0) {
-                dead = true;
-                hp = 0;
-                // stop behavior and set visual death state
-    //            canShoot = false;
-                speed = 0;
-                rotation = 90f;
-                y -= 90; // visually sink a bit
-                deathTime = 0f;
-                hitbox.setPosition(x, y);
-            }
-        }
+    private float getCenterX() {
+        return getX() + getWidth() / 2f;
+    }
 
-        // Accessors for Main to mark counted kills
-        public boolean hasCountedKill() {
-            return countedKill;
-        }
-
-        public void setCountedKill(boolean v) {
-            countedKill = v;
+    private void chasePlayer(Player player, float delta) {
+        float playerCenter = player.getHitbox().x + player.getHitbox().width / 2f;
+        if (playerCenter > getCenterX()) {
+            setX(getX() + speed * 1.5f * delta); // run lebih cepat
+            facingRight = true;
+        } else {
+            setX(getX() - speed * 1.5f * delta);
+            facingRight = false;
         }
     }
+
+    public boolean isReadyToShoot() {
+        // (tetap tersedia untuk kompatibilitas lama) — gunakan shouldFire() agar sinkron animasi
+        if (!detectedPlayer || delayTimer < detectDelay) return false;
+        Player p = findPlayer();
+        if (p == null) return false;
+        float dist = Math.abs(getCenterX() - (p.getHitbox().x + p.getHitbox().width/2f));
+        return dist <= 250f && canShoot();
+    }
+
+    /** Dipanggil dari Main: return true sekali saat animasi tembak mencapai titik melepaskan peluru */
+    public boolean shouldFire() {
+        if (state != EnemyState.SHOOT) return false;
+        if (firedThisShot) return false;
+        // jika sudah melewati frame yang kita tentukan → kembalikan true dan tandai fired
+        if (stateTime >= fireTime) {
+            firedThisShot = true;
+            return true;
+        }
+        return false;
+    }
+
+    private void patrol(float delta) {
+        if (facingRight) {
+            setX(getX() + speed * delta);
+            if (getX() >= patrolTargetX) pickNewPatrolTarget();
+        } else {
+            setX(getX() - speed * delta);
+            if (getX() <= patrolTargetX) pickNewPatrolTarget();
+        }
+    }
+
+    private void pickNewPatrolTarget() {
+        float move = MathUtils.random(150, 400);
+        if (MathUtils.randomBoolean()) {
+            patrolTargetX = getX() + move;
+            facingRight = true;
+        } else {
+            patrolTargetX = getX() - move;
+            facingRight = false;
+        }
+    }
+
+    public boolean canShoot() {
+        return TimeUtils.nanoTime() - lastShootTime > 1_800_000_000L; // 1.8 detik cooldown
+    }
+
+    public void takeDamage(float dmg) {
+        if (dead || damageCooldown > 0) return;
+        damageCooldown = 0.3f;
+        hp -= dmg;
+        if (hp <= 0) {
+            dead = true;
+            hp = 0;
+            stateTime = 0f;
+            deathTime = 0f;
+        }
+    }
+
+    private void updateHitbox() {
+        // hitbox selalu berada relatif ke pos actor — tidak mengambang lagi
+        hitbox.setPosition(getX() + getWidth() * 0.25f, getY() + getHeight() * 0.001f);
+    }
+
+    @Override
+    public void draw(Batch batch, float parentAlpha) {
+        TextureRegion frame;
+
+        if (state == EnemyState.DIE) {
+            frame = dieAnim.getKeyFrame(deathTime, false);
+        } else if (state == EnemyState.SHOOT) {
+            frame = shootAnim.getKeyFrame(stateTime, false);
+        } else if (state == EnemyState.RUN) {
+            frame = runAnim.getKeyFrame(stateTime, true);
+        } else if (state == EnemyState.WALK) {
+            frame = walkAnim.getKeyFrame(stateTime, true);
+        } else {
+            frame = idleAnim.getKeyFrame(stateTime, true);
+        }
+
+        // buat salinan region sehingga flip tidak merusak region sumber
+        TextureRegion r = new TextureRegion(frame);
+        if (!facingRight && !r.isFlipX()) r.flip(true, false);
+        if (facingRight && r.isFlipX()) r.flip(true, false);
+
+        // gambar tepat di getX(), getY() — jangan offset, supaya hitbox sinkron
+        batch.draw(r, getX(), getY(), getWidth(), getHeight());
+    }
+
+    public Rectangle getHitbox() { return hitbox; }
+    public boolean isDead() { return dead && dieAnim.isAnimationFinished(deathTime); }
+
+    public boolean hasCountedKill() { return countedKill; }
+    public void setCountedKill(boolean v) { countedKill = v; }
+}

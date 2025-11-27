@@ -2,14 +2,16 @@ package com.gdx;
 
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
+import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.scenes.scene2d.Actor;
 
 /**
  * NPC handles simple enter/wait/leave animations and exposes a frame for rendering.
  * Comments explain state intent and frame extraction logic.
  */
-public class NPC {
+public class NPC extends Actor {
 
     public enum State {
         ENTERING,
@@ -18,22 +20,18 @@ public class NPC {
         IDLE
     }
 
-    public float x, y;
-    public float speed = 100;
     public State state = State.IDLE;
-
     Animation<TextureRegion> walkAnim;
     TextureRegion idleFrame;
     TextureRegion[] walkFrames;
     public Rectangle hitbox;
-
+    public float speed = 100;
     float stateTime = 0f;
     float scale = 0.25f;
     float stopX = 100; // where NPC stops for dialog
 
     public NPC(float x, float y, Texture npcSheet) {
-        this.x = x;
-        this.y = y;
+        setPosition(x, y);
 
         // sprite sheet layout: 2 rows x 7 cols
         int cols = 7;
@@ -50,44 +48,50 @@ public class NPC {
         walkAnim = new Animation<TextureRegion>(0.12f, walkFrames);
 
         // hitbox sized from raw frame dims and scale
-        hitbox = new Rectangle(x, y, frameW * scale, frameH * scale);
+        hitbox = new Rectangle(getX(), getY(),  frameW * scale, frameH * scale);
     }
 
     public void startEnter() { state = State.ENTERING; stateTime = 0f; }
     public void startLeave() { state = State.LEAVING; stateTime = 0f; }
 
-    public void update(float delta) {
+    @Override
+    public void act(float delta) {
+        super.act(delta);
         stateTime += delta;
         switch (state) {
             case ENTERING:
-                x += speed * delta;
-                if (x >= stopX) { x = stopX; state = State.WAITING; }
+                moveBy(speed * delta, 0);
+                if (getX() >= stopX) { setX(stopX); state = State.WAITING;}
                 break;
             case WAITING:
-                // remain for dialog
                 break;
             case LEAVING:
-                x -= speed * delta;
-                if (x <= -250) { x = -250; state = State.IDLE; }
+                moveBy(-speed * delta, 0);
+                if (getX() <= -250) { setX(-250); state = State.IDLE;}
                 break;
             case IDLE:
                 break;
         }
-        hitbox.setPosition(x, y);
+        hitbox.setPosition(getX(), getY());
     }
 
-    /**
-     * Returns a cleaned TextureRegion (copy) so flipping won't mutate original frames.
-     * Ensures orientation matches movement state.
-     */
-    public TextureRegion getFrame() {
+    @Override
+    public void draw(Batch batch, float parentAlpha) {
         TextureRegion frame;
-        if (state == State.ENTERING || state == State.LEAVING) frame = walkAnim.getKeyFrame(stateTime, true);
-        else frame = idleFrame;
-
-        TextureRegion result = new TextureRegion(frame);
-        if (state == State.ENTERING) { if (result.isFlipX()) result.flip(true, false); }
-        if (state == State.LEAVING)  { if (!result.isFlipX()) result.flip(true, false); }
-        return result;
+        if (state == state.ENTERING || state == State.LEAVING) {
+            frame = walkAnim.getKeyFrame(stateTime, true);
+        } else {
+            frame = idleFrame;
+        }
+        TextureRegion r = new TextureRegion(frame);
+        if (state == state.ENTERING) {
+            if (r.isFlipX()) r.flip(true, false);
+        }
+        if (state == State.LEAVING) {
+            if (!r.isFlipX()) r.flip(true, false);
+        }
+        batch.draw(r, getX(), getY(), r.getRegionWidth() * scale, r.getRegionHeight() * scale);
     }
+
+    public Rectangle getHitbox() { return hitbox; }
 }

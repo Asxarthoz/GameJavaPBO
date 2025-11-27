@@ -1,35 +1,28 @@
 package com.gdx;
 
-import com.badlogic.gdx.ApplicationAdapter;
-import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.Input;
+import com.badlogic.gdx.*;
 import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.*;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.TimeUtils;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
+import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 
 import java.util.Random;
 
-enum GameState {
-    EXPLORE,
-    DIALOG,
-    GAMEOVER,
-    VICTORY
-}
-
 public class Main extends ApplicationAdapter {
 
     // ---------- constants ----------
-    private static final float GLOBAL_SCALE = 0.2f; // uniform scale for character frames
-    private static final int WORLD_WIDTH = 5000;    // clamp camera movement
+    private static final int WORLD_WIDTH = 5000;
     private static final int WORLD_HEIGHT = 2000;
     private static final int V_WIDTH = 800;
     private static final int V_HEIGHT = 640;
@@ -40,11 +33,10 @@ public class Main extends ApplicationAdapter {
     private static final int WAVE_SIZE = 4;    // enemies per wave
 
     // Core rendering utilities
-    private SpriteBatch batch;
+    private Stage gameStage;
+    private Stage uiStage;
     private ShapeRenderer shapeR;
     private BitmapFont font;
-    private OrthographicCamera camera;
-    private Viewport viewport;
 
     // Assets loaded once for reuse
     private Texture background;
@@ -53,14 +45,9 @@ public class Main extends ApplicationAdapter {
     private Texture npcSheet;
     private Texture bulletTexture;
     private TextureRegion bulletRegion;
-    Sound s_shot, s_hit, s_dash;
-
-
-    // --- SHIELD ASSETS ---
     private Texture shieldTexture;
     private TextureRegion shieldRegion;
-
-    // --- HEAL ASSETS ---
+    Sound s_shot, s_hit, s_dash;
     private Texture healTexture;
 
     // Game objects collections
@@ -68,14 +55,22 @@ public class Main extends ApplicationAdapter {
     private NPC npc;
     private Array<Enemy> enemies = new Array<>();
     private Array<Bullet> bullets = new Array<>();
-    Array<BossBullet> bossBullets = new Array<>();
-    Boss boss;
-    Array<Bomb> bossBombs = new Array<>();
-    Array<Explosion> explosions = new Array<>();
+    private Array<BossBullet> bossBullets = new Array<>();
+    private Boss boss;
+    private Array<Bomb> bossBombs = new Array<>();
+    private Array<Explosion> explosions = new Array<>();
 
-
+    // Enemy
+    private Texture enemyIdle, enemyWalk, enemyRun, enemyShoot, enemyDie;
+    private TextureRegion[] idleFrames, walkFrames, runFrames, shootFrames, dieFrames;
 
     // State and utilities
+    private enum GameState {
+        EXPLORE,
+        DIALOG,
+        GAMEOVER,
+        VICTORY
+    }
     private GameState currentState = GameState.DIALOG;
     private String[] dialogList = {
         "Para penjajah berusaha merebut tanah kita.",
@@ -88,8 +83,6 @@ public class Main extends ApplicationAdapter {
 
     @Override
     public void create() {
-        // Basic lib setup
-        batch = new SpriteBatch();
         shapeR = new ShapeRenderer();
         font = new BitmapFont();
 
@@ -105,53 +98,70 @@ public class Main extends ApplicationAdapter {
         npcSheet = new Texture("sprite.png");
         bulletTexture = new Texture("bullet.png");
         bulletRegion = new TextureRegion(bulletTexture);
-        background.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.ClampToEdge);
-        boss = new Boss(
-            5200, 0,
-            new Texture("Standing.png"),
-            new Texture("Run.png"),
-            new Texture("Roll.png"),
-            new Texture("bullet.png"),
-            1f, s_shot
-        );
-
-
-
-        // Load Shield & Heal
-        shieldTexture = new Texture("shield.png"); // Gambar player pegang shield
+        shieldTexture = new Texture("shield.png");
         shieldRegion = new TextureRegion(shieldTexture);
-
-        healTexture = new Texture("heal.png"); // Gambar icon heal (plus/hati)
-
+        healTexture = new Texture("heal.png");
+        enemyIdle  = new Texture("shooter/Soldier_1/Idle.png");
+        enemyWalk  = new Texture("shooter/Soldier_1/Walk.png");
+        enemyRun   = new Texture("shooter/Soldier_1/Run.png");
+        enemyShoot = new Texture("shooter/Soldier_1/Shot_1.png");
+        enemyDie   = new Texture("shooter/Soldier_1/Dead.png");
         // Camera & viewport
-        camera = new OrthographicCamera();
-        viewport = new ExtendViewport(V_WIDTH, V_HEIGHT, camera);
+        gameStage = new Stage(new ExtendViewport(V_WIDTH, V_HEIGHT, new OrthographicCamera()));
+        uiStage = new Stage(new ScreenViewport());
+        InputMultiplexer im = new InputMultiplexer(uiStage, gameStage);
+        Gdx.input.setInputProcessor(im);
 
         // Create main actor and NPC
-        player = new Player(100, 0, playerSheet, playerSheet, s_hit, s_dash);
-        npc = new NPC(-200, -100, npcSheet);
+        player = new Player(100, 0, playerSheet, playerSheet, s_hit, s_dash, shieldRegion);
+        player.setName("player");
+        gameStage.addActor(player);
+
+        npc = new NPC(-200, -150, npcSheet);
+        npc.setName("npc");
         npc.startEnter();
+        gameStage.addActor(npc);
+
+        boss = new Boss(
+                5200, 0,
+                new Texture("Standing.png"),
+                new Texture("Run.png"),
+                new Texture("Roll.png"),
+                new Texture("bullet.png"),
+                1f, s_shot
+        );
+        boss.setBulletsArray(bossBullets);
+        boss.setBombsArray(bossBombs);
+        boss.setName("boss");
+        gameStage.addActor(boss);
 
         // Spawn first wave
+        idleFrames  = new TextureRegion[7];
+        walkFrames  = new TextureRegion[8];
+        runFrames   = new TextureRegion[8];
+        shootFrames = new TextureRegion[4];
+        dieFrames   = new TextureRegion[5];
+
+        for (int i = 0; i < 7; i++) idleFrames[i]  = new TextureRegion(enemyIdle,  i * 128, 0, 128, 128);
+        for (int i = 0; i < 8; i++) walkFrames[i]  = new TextureRegion(enemyWalk,  i * 128, 0, 128, 128);
+        for (int i = 0; i < 8; i++) runFrames[i]   = new TextureRegion(enemyRun,   i * 128, 0, 128, 128);
+        for (int i = 0; i < 4; i++) shootFrames[i] = new TextureRegion(enemyShoot, i * 128, 0, 128, 128);
+        for (int i = 0; i < 5; i++) dieFrames[i]   = new TextureRegion(enemyDie,   i * 128, 0, 128, 128);
         spawnWave();
 
-        camera.update();
+        background.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.ClampToEdge);
     }
 
     private void spawnWave() {
+        for (Enemy e : enemies) e.remove();
         enemies.clear();
-        TextureRegion enemyRegion = new TextureRegion(enemyTexture);
         for (int i = 0; i < WAVE_SIZE; i++) {
-            int x;
-            if(killCount == 0) {
-                x = rand.nextInt(1001) + 1000;
-            } else {
-                x = rand.nextInt(2001);
-            }
+            int x = (killCount == 0) ? rand.nextInt(1000, 2000) : rand.nextInt(0, 2000);
+            float scale = 2f;
 
-            int y = 0;
-            float scale = 0.4f;
-            enemies.add(new Enemy(x, y, enemyRegion, scale));
+            Enemy e = new Enemy(x, 0, idleFrames, walkFrames, runFrames, shootFrames, dieFrames, scale);
+            gameStage.addActor(e);
+            enemies.add(e);
         }
     }
 
@@ -164,18 +174,16 @@ public class Main extends ApplicationAdapter {
         // Update phase
         if (currentState == GameState.DIALOG) {
             player.updateDialog(delta);
-            npc.update(delta);
-        } else {
-            player.update(delta);
-            npc.update(delta);
-            for (Enemy e : enemies) e.update(delta, player.hitbox);
-            boss.update(delta, player.hitbox, bossBullets, bossBombs);
-
         }
+        gameStage.act(delta);
+        uiStage.act(delta);
 
         // Enemies shoot
         for (Enemy e : enemies) {
-            if (e.canShoot()) shootFromEnemy(e);
+            if (e.shouldFire()) {
+                shootFromEnemy(e);
+                e.lastShootTime = TimeUtils.nanoTime();
+            }
         }
 
         // Dialog progression
@@ -194,7 +202,7 @@ public class Main extends ApplicationAdapter {
             Rectangle atk = player.getAttackHitbox();
             if (atk != null && !player.hitRegistered) {
                 for (Enemy e : enemies) {
-                    if (!e.dead && atk.overlaps(e.hitbox)) {
+                    if (!e.dead && atk.overlaps(e.getHitbox())) {
                         e.takeDamage(100);
                         player.hitRegistered = true;
                         break;
@@ -219,13 +227,20 @@ public class Main extends ApplicationAdapter {
                     en.setCountedKill(true);
                     killCount++;
                     if (killCount >= 20 && !boss.active) {
-                        boss.active = true;
+                        boss.setActive(true);
                         boss.state = Boss.State.RUN;
                     }
 
                 }
+                en.remove();
                 enemies.removeIndex(i);
             }
+        }
+        if (boss.active && boss.hp <= 0) {
+            boss.remove();
+            boss.active = false;
+            killCount++;
+            currentState = GameState.VICTORY;
         }
 
         // Spawn next wave
@@ -234,11 +249,10 @@ public class Main extends ApplicationAdapter {
         }
 
         // Victory
-        if (killCount >= KILL_TARGET && currentState != GameState.VICTORY) {
+        if (killCount >= KILL_TARGET + 1 && currentState != GameState.VICTORY) {
             currentState = GameState.VICTORY;
             System.out.println("Victory! Kills = " + killCount);
         }
-
         // Bullets update
         for (int i = bullets.size - 1; i >= 0; i--) {
             Bullet b = bullets.get(i);
@@ -321,127 +335,55 @@ public class Main extends ApplicationAdapter {
             if (ex.life <= 0) explosions.removeIndex(i);
         }
 
-
-
         // Camera Update
-        camera.position.x = player.x + player.hitbox.width / 2;
-        float halfW = viewport.getWorldWidth() / 2f;
-        if (camera.position.x < halfW) camera.position.x = halfW;
-        if (camera.position.x > WORLD_WIDTH - halfW) camera.position.x = WORLD_WIDTH - halfW;
-        camera.update();
+        Camera cam = gameStage.getCamera();
+        float halfW = ((ExtendViewport)gameStage.getViewport()).getWorldWidth() / 2f;
+        float px = player.getX() + player.getWidth() / 2f;
+        cam.position.x = MathUtils.clamp(px, halfW, WORLD_WIDTH - halfW);
+        cam.update();
 
         // ---------- Rendering ----------
-        batch.setProjectionMatrix(camera.combined);
+        SpriteBatch batch = (SpriteBatch)gameStage.getBatch();
+        batch.setProjectionMatrix(cam.combined);
         batch.begin();
-
-        // Background
         batch.draw(background, 0, 0);
-        batch.draw(background,  background.getWidth(), 0);
+        batch.draw(background, background.getWidth(), 0);
         batch.draw(background, 2 * background.getWidth(), 0);
+        batch.end();
 
-        // --- PLAYER & SHIELD RENDER LOGIC ---
-        if (player.isShielding) {
-            // Mode Shield: Gambar Player Memegang Shield
-
-            // 1. Reset flip jika perlu
-            if (shieldRegion.isFlipX()) shieldRegion.flip(true, false);
-
-            // 2. Flip sesuai arah
-            if (!player.facingRight) shieldRegion.flip(true, false);
-
-            // 3. Gambar dengan ukuran khusus (jika ingin diubah ukurannya, ubah GLOBAL_SCALE di sini)
-            float scaleKhusus = 0.4f; // Tentukan skala khusus shield
-
-            batch.draw(shieldRegion,
-                player.x - 40,  // Geser X jika perlu (minus ke kiri, plus ke kanan)
-                player.y - 50,   // Geser Y jika perlu (minus ke bawah, plus ke atas)
-                shieldRegion.getRegionWidth() * scaleKhusus,
-                shieldRegion.getRegionHeight() * scaleKhusus
-            );
-
-        } else {
-            // Mode Normal: Gambar Animasi Biasa
-            TextureRegion frame = player.getFrame();
-            batch.draw(frame, player.x, player.y, frame.getRegionWidth() * GLOBAL_SCALE, frame.getRegionHeight() * GLOBAL_SCALE);
-        }
-
-        for (BossBullet b : bossBullets) {
-            batch.draw(b.sprite, b.rect.x, b.rect.y, b.rect.width, b.rect.height);
-        }
-
-        TextureRegion bf = boss.getFrame();
-        batch.draw(bf, boss.x - 140, boss.y, bf.getRegionWidth() * 3, bf.getRegionHeight() * 3);
-
-
-        // Enemies
-        for (Enemy e : enemies) {
-            batch.draw(
-                e.getSprite(),
-                e.x, e.y - 30,
-                85, 125,
-                170, 250,
-                1, 1,
-                e.dead ? e.rotation : 0
-            );
-        }
-
-        // Bullets
-        for (Bullet b : bullets) {
-            batch.draw(
-                bulletRegion,
-                b.rect.x, b.rect.y,
-                b.rect.width / 2, b.rect.height / 2,
-                b.rect.width + 30, b.rect.height + 30,
-                1, 1,
-                b.rotation
-            );
-        }
-
-        // gambar bomb
-        for (Bomb b : bossBombs) {
-            batch.draw(b.sprite, b.rect.x, b.rect.y, b.rect.width, b.rect.height);
-        }
-
-// gambar explosion
-        for (Explosion ex : explosions) {
-            TextureRegion f = ex.getFrame();
-            batch.draw(f, ex.x - 150, ex.y - 150, 300, 300);
-        }
-
-
-
-        // NPC
-        TextureRegion npcFrame = npc.getFrame();
-        batch.draw(npcFrame, npc.x, npc.y - 21, npcFrame.getRegionWidth() * 0.2f, npcFrame.getRegionHeight() * 0.2f);
+        // draw stages
+        gameStage.draw();
 
         // --- HUD SECTION ---
         // Hitung posisi pojok kiri atas layar berdasarkan kamera
-        float camLeft = camera.position.x - viewport.getWorldWidth() / 2;
-        float camTop = camera.position.y + viewport.getWorldHeight() / 2;
+        SpriteBatch uiBatch = (SpriteBatch)uiStage.getBatch();
+        uiBatch.setProjectionMatrix(uiStage.getCamera().combined);
+
+        uiBatch.begin();
+        float worldWidth = uiStage.getViewport().getWorldWidth();
+        float worldHeight = uiStage.getViewport().getWorldHeight();
 
         font.setColor(Color.WHITE);
         // Teks Kills
-        font.draw(batch, "Kills: " + killCount + " / " + KILL_TARGET, camLeft + 20, camTop - 20);
+        font.draw(uiStage.getBatch(), "Kills: " + killCount + " / " + KILL_TARGET, 20, worldHeight - 20);
         // Teks Dash
-        font.draw(batch, player.getDashStatusString(), camLeft + 20, camTop - 40);
+        font.draw(uiStage.getBatch(), player.getDashStatusString(), 20, worldHeight - 40);
 
         // --- HEAL UI LOGIC ---
         // Gambar Icon Heal di samping teks (misal geser 250 pixel ke kanan)
-        float healIconX = camLeft + 150;
-        float healIconY = camTop - 90; // Posisi Y icon
+        float healIconX = 150;
+        float healIconY = worldHeight - 90; // Posisi Y icon
         float healIconSize = 90; // Ukuran icon 40x40
 
-        batch.draw(healTexture, healIconX, healIconY, healIconSize, healIconSize);
+        uiStage.getBatch().draw(healTexture, healIconX, healIconY, healIconSize, healIconSize);
 
         // Gambar Counter Cooldown di bawah icon Heal
         if (player.healTimer > 0) {
             font.setColor(Color.YELLOW);
             String cdText = String.format("%.0f", player.healTimer);
-
             font.getData().setScale(2.0f);
-
             // Gambar text (sesuaikan posisi X dan Y agar pas di tengah jika ukurannya berubah)
-            font.draw(batch, cdText, healIconX + 35, healIconY + 10);
+            font.draw(uiStage.getBatch(), cdText, healIconX + 35, healIconY + 10);
 
             // [PENTING: KEMBALIKAN KE UKURAN NORMAL]
             // Wajib di-reset ke 1.0f agar tulisan lain (seperti Kills/Dialog) tidak ikut membesar
@@ -452,73 +394,72 @@ public class Main extends ApplicationAdapter {
         // Dialog text
         if (currentState == GameState.DIALOG) {
             font.setColor(Color.WHITE);
-            font.draw(batch, dialogList[dialogIndex], camLeft + 40, camera.position.y - viewport.getWorldHeight() / 2 + 40);
+            font.draw(uiStage.getBatch(), dialogList[dialogIndex], 40, 80);
         }
 
-        batch.end();
+        uiStage.getBatch().end();
 
         // Draw health bars
-        shapeR.setProjectionMatrix(camera.combined);
+        shapeR.setProjectionMatrix(cam.combined);
         shapeR.begin(ShapeRenderer.ShapeType.Filled);
         if (boss.active) {
             float pct = boss.hp / boss.maxHp;
             shapeR.setColor(Color.RED);
-            shapeR.rect(boss.x, boss.y + boss.hitbox.height + 20, 200 * pct, 15);
+            shapeR.rect(boss.getX(), boss.getY() + boss.getHitbox().height + 20, 200 * pct, 15);
         }
-
-
 
         // Enemy HP
         for (Enemy e : enemies) {
             float pct = (e.maxHp <= 0) ? 0f : (e.hp / e.maxHp);
             shapeR.setColor(Color.RED);
-            shapeR.rect(e.hitbox.x, e.hitbox.y + e.hitbox.height + 10, 100 * pct, 10);
+            shapeR.rect(e.getHitbox().x, e.getHitbox().y + e.getHitbox().height + 10, 100 * pct, 10);
         }
 
         // Player HP
         shapeR.setColor(Color.RED);
-        shapeR.rect(player.hitbox.x, player.hitbox.y + player.hitbox.height + 10, 100 * (player.health / player.MAX_HEALTH), 10);
-
+        shapeR.rect(player.getHitbox().x, player.getHitbox().y + player.getHitbox().height + 10, 100 * (player.health / player.MAX_HEALTH), 10);
         shapeR.end();
 
         // Debug outlines
         shapeR.begin(ShapeRenderer.ShapeType.Line);
         shapeR.setColor(Color.YELLOW);
-        shapeR.rect(player.hitbox.x, player.hitbox.y, player.hitbox.width, player.hitbox.height);
-        shapeR.rect(boss.hitbox.x, boss.hitbox.y, boss.hitbox.width, boss.hitbox.height);
-        for (Enemy e : enemies) shapeR.rect(e.hitbox.x, e.hitbox.y, e.hitbox.width, e.hitbox.height);
+        shapeR.rect(player.getHitbox().x, player.getHitbox().y, player.getHitbox().width, player.getHitbox().height);
+        shapeR.rect(boss.getHitbox().x, boss.getHitbox().y, boss.getHitbox().width, boss.getHitbox().height);
+        for (Enemy e : enemies) shapeR.rect(e.getHitbox().x, e.getHitbox().y, e.getHitbox().width, e.getHitbox().height);
         shapeR.end();
     }
 
     void shootFromEnemy(Enemy e) {
-        float startX = e.hitbox.x + e.hitbox.width / 2;
+        float startX = e.getHitbox().x + e.getHitbox().width / 2;
         if (e.facingRight) startX += 30; else startX -= 130;
-        float startY = e.hitbox.y + e.hitbox.height / 2 - 25;
+        float startY = e.getHitbox().y + e.getHitbox().height / 2 - 25;
 
-        float targetX = player.hitbox.x + player.hitbox.width / 2;
+        float targetX = player.getHitbox().x + player.getHitbox().width / 2;
         float bulletSpeed = 500f;
         float velX = (targetX > startX) ? bulletSpeed : -bulletSpeed;
         float velY = 0;
 
-        Bullet bullet = new Bullet(startX, startY, 20, 20, velX, velY);
+        Bullet bullet = new Bullet(bulletRegion, startX, startY, 20, 20, velX, velY, player);
         bullet.rotation = (velX < 0) ? 0 : 180;
         bullets.add(bullet);
         s_shot.play();
+        gameStage.addActor(bullet);
 
         e.lastShootTime = TimeUtils.nanoTime();
     }
 
     @Override
     public void resize(int width, int height) {
-        viewport.update(width, height, true);
+        gameStage.getViewport().update(width, height, true);
+        uiStage.getViewport().update(width, height, true);
     }
 
     @Override
     public void dispose() {
-        batch.dispose();
         shapeR.dispose();
         font.dispose();
-
+        gameStage.dispose();
+        uiStage.dispose();
         background.dispose();
         enemyTexture.dispose();
         playerSheet.dispose();
@@ -528,15 +469,4 @@ public class Main extends ApplicationAdapter {
         healTexture.dispose(); // Dispose heal texture
     }
 
-    class Bullet {
-        Rectangle rect;
-        float velX, velY;
-        float rotation;
-
-        public Bullet(float x, float y, float width, float height, float vX, float vY) {
-            this.rect = new Rectangle(x, y, width, height);
-            this.velX = vX;
-            this.velY = vY;
-        }
-    }
 }
