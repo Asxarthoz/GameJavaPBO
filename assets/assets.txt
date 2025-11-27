@@ -1,5 +1,10 @@
+Roll.png
+Run.png
+Standing.png
 attackSpriteC.png
 bg.png
+bomb.png
+bombEx.png
 bullet.png
 enemy.png
 grass.jpg
@@ -10,4 +15,7 @@ logo.png
 player/player1.png
 player_walk.png
 shield.png
+sound/dash.MP3
+sound/hit.MP3
+sound/shot.MP3
 sprite.png

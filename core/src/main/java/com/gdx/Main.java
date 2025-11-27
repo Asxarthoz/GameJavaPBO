@@ -3,6 +3,7 @@ package com.gdx;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.*;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
@@ -52,6 +53,8 @@ public class Main extends ApplicationAdapter {
     private Texture npcSheet;
     private Texture bulletTexture;
     private TextureRegion bulletRegion;
+    Sound s_shot, s_hit, s_dash;
+
 
     // --- SHIELD ASSETS ---
     private Texture shieldTexture;
@@ -65,6 +68,12 @@ public class Main extends ApplicationAdapter {
     private NPC npc;
     private Array<Enemy> enemies = new Array<>();
     private Array<Bullet> bullets = new Array<>();
+    Array<BossBullet> bossBullets = new Array<>();
+    Boss boss;
+    Array<Bomb> bossBombs = new Array<>();
+    Array<Explosion> explosions = new Array<>();
+
+
 
     // State and utilities
     private GameState currentState = GameState.DIALOG;
@@ -84,6 +93,11 @@ public class Main extends ApplicationAdapter {
         shapeR = new ShapeRenderer();
         font = new BitmapFont();
 
+        // Load SOund
+        s_shot = Gdx.audio.newSound(Gdx.files.internal("sound/shot.mp3"));
+        s_hit = Gdx.audio.newSound(Gdx.files.internal("sound/hit.mp3"));
+        s_dash = Gdx.audio.newSound(Gdx.files.internal("sound/dash.mp3"));
+
         // Load textures once
         background = new Texture("bg.png");
         enemyTexture = new Texture("enemy.png");
@@ -92,6 +106,16 @@ public class Main extends ApplicationAdapter {
         bulletTexture = new Texture("bullet.png");
         bulletRegion = new TextureRegion(bulletTexture);
         background.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.ClampToEdge);
+        boss = new Boss(
+            5200, 0,
+            new Texture("Standing.png"),
+            new Texture("Run.png"),
+            new Texture("Roll.png"),
+            new Texture("bullet.png"),
+            1f, s_shot
+        );
+
+
 
         // Load Shield & Heal
         shieldTexture = new Texture("shield.png"); // Gambar player pegang shield
@@ -104,7 +128,7 @@ public class Main extends ApplicationAdapter {
         viewport = new ExtendViewport(V_WIDTH, V_HEIGHT, camera);
 
         // Create main actor and NPC
-        player = new Player(100, 0, playerSheet, playerSheet);
+        player = new Player(100, 0, playerSheet, playerSheet, s_hit, s_dash);
         npc = new NPC(-200, -100, npcSheet);
         npc.startEnter();
 
@@ -145,6 +169,8 @@ public class Main extends ApplicationAdapter {
             player.update(delta);
             npc.update(delta);
             for (Enemy e : enemies) e.update(delta, player.hitbox);
+            boss.update(delta, player.hitbox, bossBullets, bossBombs);
+
         }
 
         // Enemies shoot
@@ -169,13 +195,21 @@ public class Main extends ApplicationAdapter {
             if (atk != null && !player.hitRegistered) {
                 for (Enemy e : enemies) {
                     if (!e.dead && atk.overlaps(e.hitbox)) {
-                        e.takeDamage(30);
+                        e.takeDamage(100);
                         player.hitRegistered = true;
                         break;
                     }
                 }
             }
         }
+
+        if (player.isAttack && boss.active) {
+            Rectangle atk = player.getAttackHitbox();
+            if (atk != null && atk.overlaps(boss.hitbox)) {
+                boss.hp -= 30;
+            }
+        }
+
 
         // Process dead enemies
         for (int i = enemies.size - 1; i >= 0; i--) {
@@ -184,6 +218,11 @@ public class Main extends ApplicationAdapter {
                 if (!en.hasCountedKill()) {
                     en.setCountedKill(true);
                     killCount++;
+                    if (killCount >= 20 && !boss.active) {
+                        boss.active = true;
+                        boss.state = Boss.State.RUN;
+                    }
+
                 }
                 enemies.removeIndex(i);
             }
@@ -222,6 +261,67 @@ public class Main extends ApplicationAdapter {
                 bullets.removeIndex(i);
             }
         }
+
+        for (int i = bossBullets.size - 1; i >= 0; i--) {
+            BossBullet b = bossBullets.get(i);
+            b.update(delta);
+
+            if (b.rect.overlaps(player.hitbox)) {
+                if (player.isShielding) {
+                    bossBullets.removeIndex(i);
+                    continue;
+                }
+                if(player.health > 0) player.health -= 20;
+
+                bossBullets.removeIndex(i);
+                continue;
+            }
+        }
+
+        // ==== BOMB UPDATE ====
+
+        for (int i = bossBombs.size - 1; i >= 0; i--) {
+            Bomb b = bossBombs.get(i);
+            b.update(delta);
+
+            // Jika bomb kena shield
+            if (b.rect.overlaps(player.hitbox) && player.isShielding) {
+                explosions.add(new Explosion(b.rect.x, b.rect.y, boss.explosionAnim));
+                bossBombs.removeIndex(i);
+                continue;
+            }
+
+            // Jika bomb kena player tanpa shield
+            if (b.rect.overlaps(player.hitbox) && !player.isShielding) {
+                // ga langsung meledak, tetap countdown
+                player.health -= 20;
+            }
+
+            // Waktu habis → otomatis meledak
+            if (b.exploded) {
+                explosions.add(new Explosion(b.rect.x, b.rect.y, boss.explosionAnim));
+                bossBombs.removeIndex(i);
+            }
+        }
+
+        for (int i = explosions.size - 1; i >= 0; i--) {
+            Explosion ex = explosions.get(i);
+            ex.update(delta);
+
+            // Hit check radius 300
+            float dx = (player.hitbox.x + player.hitbox.width/2) - ex.x;
+            float dy = (player.hitbox.y + player.hitbox.height/2) - ex.y;
+            float dist = (float)Math.sqrt(dx*dx + dy*dy);
+
+            if (!ex.hasDamaged && dist <= ex.radius) {
+                player.health -= 50;
+                ex.hasDamaged = true;
+            }
+
+            if (ex.life <= 0) explosions.removeIndex(i);
+        }
+
+
 
         // Camera Update
         camera.position.x = player.x + player.hitbox.width / 2;
@@ -265,6 +365,14 @@ public class Main extends ApplicationAdapter {
             batch.draw(frame, player.x, player.y, frame.getRegionWidth() * GLOBAL_SCALE, frame.getRegionHeight() * GLOBAL_SCALE);
         }
 
+        for (BossBullet b : bossBullets) {
+            batch.draw(b.sprite, b.rect.x, b.rect.y, b.rect.width, b.rect.height);
+        }
+
+        TextureRegion bf = boss.getFrame();
+        batch.draw(bf, boss.x - 140, boss.y, bf.getRegionWidth() * 3, bf.getRegionHeight() * 3);
+
+
         // Enemies
         for (Enemy e : enemies) {
             batch.draw(
@@ -288,6 +396,19 @@ public class Main extends ApplicationAdapter {
                 b.rotation
             );
         }
+
+        // gambar bomb
+        for (Bomb b : bossBombs) {
+            batch.draw(b.sprite, b.rect.x, b.rect.y, b.rect.width, b.rect.height);
+        }
+
+// gambar explosion
+        for (Explosion ex : explosions) {
+            TextureRegion f = ex.getFrame();
+            batch.draw(f, ex.x - 150, ex.y - 150, 300, 300);
+        }
+
+
 
         // NPC
         TextureRegion npcFrame = npc.getFrame();
@@ -339,6 +460,13 @@ public class Main extends ApplicationAdapter {
         // Draw health bars
         shapeR.setProjectionMatrix(camera.combined);
         shapeR.begin(ShapeRenderer.ShapeType.Filled);
+        if (boss.active) {
+            float pct = boss.hp / boss.maxHp;
+            shapeR.setColor(Color.RED);
+            shapeR.rect(boss.x, boss.y + boss.hitbox.height + 20, 200 * pct, 15);
+        }
+
+
 
         // Enemy HP
         for (Enemy e : enemies) {
@@ -357,6 +485,7 @@ public class Main extends ApplicationAdapter {
         shapeR.begin(ShapeRenderer.ShapeType.Line);
         shapeR.setColor(Color.YELLOW);
         shapeR.rect(player.hitbox.x, player.hitbox.y, player.hitbox.width, player.hitbox.height);
+        shapeR.rect(boss.hitbox.x, boss.hitbox.y, boss.hitbox.width, boss.hitbox.height);
         for (Enemy e : enemies) shapeR.rect(e.hitbox.x, e.hitbox.y, e.hitbox.width, e.hitbox.height);
         shapeR.end();
     }
@@ -374,6 +503,7 @@ public class Main extends ApplicationAdapter {
         Bullet bullet = new Bullet(startX, startY, 20, 20, velX, velY);
         bullet.rotation = (velX < 0) ? 0 : 180;
         bullets.add(bullet);
+        s_shot.play();
 
         e.lastShootTime = TimeUtils.nanoTime();
     }

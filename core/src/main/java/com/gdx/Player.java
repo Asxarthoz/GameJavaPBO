@@ -2,6 +2,7 @@ package com.gdx;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
@@ -25,6 +26,8 @@ public class Player {
     public boolean isAttack = false;
     public float attackTime = 0f;
     public boolean hitRegistered = false;
+    Sound hitSound;
+    Sound dashSound;
 
     // --- SHIELD VARIABLES ---
     public boolean isShielding = false;
@@ -51,9 +54,11 @@ public class Player {
 
     float stateTime = 0f;
 
-    public Player(float x, float y, Texture spriteSheet, Texture attackSheet) {
+    public Player(float x, float y, Texture spriteSheet, Texture attackSheet, Sound sound, Sound soundDash) {
         this.x = x;
         this.y = y;
+        this.hitSound = sound;
+        this.dashSound = soundDash;
 
         // character sub-rectangle
         int charX = 750;
@@ -112,10 +117,12 @@ public class Player {
         if (Gdx.input.isKeyPressed(Input.Keys.D)) {
             x += speed * delta;
             facingRight = true;
+            System.out.println(x);
         }
         if (Gdx.input.isKeyPressed(Input.Keys.A)) {
             x -= speed * delta;
             facingRight = false;
+            System.out.println(x);
         }
 
         // Jump
@@ -125,6 +132,7 @@ public class Player {
         dashCooldownTimer -= delta;
         if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE) && dashCooldownTimer <= 0 && !isDashing) {
             isDashing = true;
+            this.dashSound.play();
             dashTime = 0f;
             dashCooldownTimer = dashCooldown;
         }
@@ -134,6 +142,7 @@ public class Player {
             isAttack = true;
             attackTime = 0f;
             hitRegistered = false;
+            hitSound.play();
         }
 
         // Attack animation logic
