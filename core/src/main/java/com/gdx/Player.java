@@ -10,8 +10,6 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 
-//import static com.gdx.Main.WORLD_WIDTH;
-
 /**
  * Player: movement, attack, shield, dash, and heal mechanics.
  */
@@ -33,15 +31,17 @@ public class Player extends Actor {
     public boolean isAttack = false;
     public float attackTime = 0f;
     public boolean hitRegistered = false;
+
     Sound hitSound;
     Sound dashSound;
+    Sound healSound; // <-- Variabel Sound Heal
 
     // --- SHIELD VARIABLES ---
     public boolean isShielding = false;
 
     // --- HEAL VARIABLES ---
-    public float healTimer = 0f;          // Hitung mundur waktu heal
-    public float healCooldown = 5f;       // Cooldown 5 detik
+    public float healTimer = 0f;
+    public float healCooldown = 5f;
 
     public Rectangle hitbox;
     float scale = 0.2f;
@@ -62,10 +62,12 @@ public class Player extends Actor {
 
     float stateTime = 0f;
 
-    public Player(float x, float y, Texture spriteSheet, Texture attackSheet, Sound sound, Sound soundDash, TextureRegion shieldRegion) {
+    // Constructor Updated: Menambahkan parameter healSound
+    public Player(float x, float y, Texture spriteSheet, Texture attackSheet, Sound sound, Sound soundDash, Sound healSound, TextureRegion shieldRegion) {
         this.setPosition(x, y);
         this.hitSound = sound;
         this.dashSound = soundDash;
+        this.healSound = healSound; // <-- Assign sound ke variabel
         this.shieldRegion = shieldRegion;
 
         // character sub-rectangle
@@ -99,9 +101,6 @@ public class Player extends Actor {
         hitbox = new Rectangle(getX(), getY(), w - 60, h - 30);
     }
 
-    /*
-        Pengganti update(karena pakai stage)
-     */
     @Override
     public void act(float delta) {
         super.act(delta);
@@ -115,27 +114,35 @@ public class Player extends Actor {
         if (Gdx.input.isKeyJustPressed(Input.Keys.H)) {
             if (healTimer <= 0 && health < MAX_HEALTH) {
                 health += 30;
-                if (health > MAX_HEALTH) health = MAX_HEALTH; // Mentok di 100
-                healTimer = healCooldown; // Set cooldown 5 detik
+                if (health > MAX_HEALTH) health = MAX_HEALTH;
+                healTimer = healCooldown;
+
+                // Play Heal Sound
+                if (healSound != null) {
+                    healSound.play(); // <-- Sound Heal Berbunyi di sini
+                }
+
                 System.out.println("Healed! Current HP: " + health);
             }
         }
 
-        // Shield Logic
+        // Shield Logic Input
         if (Gdx.input.isButtonPressed(Input.Buttons.RIGHT)) {
             isShielding = true;
         } else {
             isShielding = false;
-            if (Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {
-                speed = 550;
-            } else {
-                speed = 200;
-            }
         }
+
+        // Speed Adjustment Logic
         if (isShielding) {
-            speed = 100f;
+            speed = 100f; // Melambat saat shield
         } else {
-            speed = 200f;
+            // Jika tidak shield, cek sprint
+            if (Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)) {
+                speed = 550f;
+            } else {
+                speed = 200f;
+            }
         }
 
         // Movement
@@ -163,7 +170,7 @@ public class Player extends Actor {
             dashCooldownTimer = dashCooldown;
         }
 
-        // Attack input
+        // Attack input (Hanya bisa attack jika TIDAK shielding)
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT) && !isAttack && !isShielding) {
             isAttack = true;
             attackTime = 0f;
@@ -203,8 +210,7 @@ public class Player extends Actor {
         if (getY() <= 0) { setY(0); velocityY = 0; isGround = true; }
 
         // CLAMP
-        if (getX() < 0) setX(0); // batas kiri
-//        if (getX() + getWidth() > WORLD_WIDTH) setX(WORLD_WIDTH - getWidth()); // batas kanan
+        if (getX() < 0) setX(0);
         if (health > MAX_HEALTH) health = MAX_HEALTH;
         if (health < 0) health = 0f;
 
@@ -213,8 +219,7 @@ public class Player extends Actor {
     }
 
     /**
-     * Mengambil frame animasi berdasarkan state:
-     * idle, jalan, atau serang, lalu di-flip sesuai arah.
+     * Mengambil frame animasi
      */
     public TextureRegion getFrame() {
         TextureRegion rawFrame;
@@ -234,23 +239,36 @@ public class Player extends Actor {
         return frame;
     }
 
-    // Render dari stage
     @Override
     public void draw(Batch batch, float parentAlpha) {
-        TextureRegion frame = getFrame();
-        batch.draw(
+        // --- BAGIAN SAAT KLIK KANAN (SHIELD) ---
+        if (isShielding) {
+            // Logika flip
+            boolean flip = !facingRight;
+            if (shieldRegion.isFlipX() != flip) {
+                shieldRegion.flip(true, false);
+            }
+
+            // --- ATUR POSISI DI SINI ---
+            float penyesuaianY = -55f;
+            float penyesuaianX = -50f;
+
+            batch.draw(
+                shieldRegion,
+                getX() + penyesuaianX,
+                getY() + penyesuaianY,
+                shieldRegion.getRegionWidth() * scale * 2.2f,
+                shieldRegion.getRegionHeight() * scale * 2.2f
+            );
+        }
+        // --- BAGIAN NORMAL ---
+        else {
+            TextureRegion frame = getFrame();
+            batch.draw(
                 frame,
                 getX(), getY(),
                 frame.getRegionWidth() * scale,
                 frame.getRegionHeight() * scale
-        );
-
-        if (isShielding) {
-            batch.draw(
-                    shieldRegion,
-                    getX(), getY(),
-                    shieldRegion.getRegionWidth() * scale * 1.2f,
-                    shieldRegion.getRegionHeight() * scale * 1.2f
             );
         }
     }
@@ -259,7 +277,6 @@ public class Player extends Actor {
         stateTime += delta;
     }
 
-    // Hitbox serangan area
     public Rectangle getAttackHitbox() {
         if (!isAttack) return null;
         float attackWidth = 60;
@@ -273,7 +290,6 @@ public class Player extends Actor {
 
     public Rectangle getHitbox() { return hitbox; }
 
-    // Dash status
     public String getDashStatusString() {
         if (dashCooldownTimer <= 0f) return "DASH: READY";
         return String.format("DASH: cooldown %.1fs", dashCooldownTimer);

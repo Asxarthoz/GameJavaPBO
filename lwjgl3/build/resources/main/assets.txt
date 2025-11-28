@@ -109,9 +109,12 @@ shooter/Soldier_3/Shot_2.png
 shooter/Soldier_3/Smoke.png
 shooter/Soldier_3/Walk.png
 sound/dash.MP3
+sound/heal.ogg
 sound/hit.MP3
 sound/shot.MP3
+sound/soundEpic.ogg
 sprite.png
+start.png
 trader/COUPON.pdf
 trader/COUPON.png
 trader/Font.txt

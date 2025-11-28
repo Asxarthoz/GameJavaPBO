@@ -1,8 +1,14 @@
 package com.gdx;
 
-import com.badlogic.gdx.*;
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.InputMultiplexer;
+import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.audio.Sound;
-import com.badlogic.gdx.graphics.*;
+import com.badlogic.gdx.graphics.Camera;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
@@ -15,7 +21,6 @@ import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.TimeUtils;
 import com.badlogic.gdx.utils.viewport.ExtendViewport;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
-import com.badlogic.gdx.utils.viewport.Viewport;
 
 import java.util.Random;
 
@@ -30,8 +35,8 @@ public class GameScreen implements Screen {
 
     // Wave and kill tracking
     private int killCount = 0;
-    private static final int KILL_TARGET = 20; // level goal
-    private static final int WAVE_SIZE = 4;    // enemies per wave
+    private static final int KILL_TARGET = 20;
+    private static final int WAVE_SIZE = 4;
 
     // Core rendering utilities
     private Stage gameStage;
@@ -48,7 +53,11 @@ public class GameScreen implements Screen {
     private TextureRegion bulletRegion;
     private Texture shieldTexture;
     private TextureRegion shieldRegion;
+
+    // --- SOUND VARIABLES ---
     Sound s_shot, s_hit, s_dash;
+    Sound s_heal; // <-- Variabel Sound Heal Baru
+
     private Texture healTexture;
 
     // Game objects collections
@@ -91,10 +100,12 @@ public class GameScreen implements Screen {
         shapeR = new ShapeRenderer();
         font = new BitmapFont();
 
-        // Load SOund
+        // Load Sound
+        // Pastikan nama file di folder assets/sound/ adalah "heal.mp3"
         s_shot = Gdx.audio.newSound(Gdx.files.internal("sound/shot.mp3"));
         s_hit = Gdx.audio.newSound(Gdx.files.internal("sound/hit.mp3"));
         s_dash = Gdx.audio.newSound(Gdx.files.internal("sound/dash.mp3"));
+        s_heal = Gdx.audio.newSound(Gdx.files.internal("sound/heal.ogg")); // <-- Load Sound Heal
 
         // Load textures once
         background = new Texture("bg.png");
@@ -111,8 +122,10 @@ public class GameScreen implements Screen {
         enemyRun   = new Texture("shooter/Soldier_1/Run.png");
         enemyShoot = new Texture("shooter/Soldier_1/Shot_1.png");
         enemyDie   = new Texture("shooter/Soldier_1/Dead.png");
+
+        // Pastikan class Boss sudah ada constructornya yang sesuai
         boss = new Boss(
-            1500, 0,
+            5100, 0,
             new Texture("Standing.png"),
             new Texture("Run.png"),
             new Texture("Roll.png"),
@@ -130,7 +143,8 @@ public class GameScreen implements Screen {
         Gdx.input.setInputProcessor(im);
 
         // Create main actor and NPC
-        player = new Player(100, 0, playerSheet, playerSheet, s_hit, s_dash, shieldRegion);
+        // UPDATE: Menambahkan s_heal ke parameter constructor Player
+        player = new Player(100, 0, playerSheet, playerSheet, s_hit, s_dash, s_heal, shieldRegion);
         player.setName("player");
         gameStage.addActor(player);
 
@@ -233,7 +247,7 @@ public class GameScreen implements Screen {
                 if (!en.hasCountedKill()) {
                     en.setCountedKill(true);
                     killCount++;
-                    if (killCount >= 1 && !boss.active) {
+                    if (killCount >= KILL_TARGET && !boss.active) {
                         boss.setActive(true);
                         boss.state = Boss.State.RUN;
                     }
@@ -373,7 +387,6 @@ public class GameScreen implements Screen {
         batch.end();
 
         // --- HUD SECTION ---
-        // Hitung posisi pojok kiri atas layar berdasarkan kamera
         SpriteBatch uiBatch = (SpriteBatch)uiStage.getBatch();
         uiBatch.setProjectionMatrix(uiStage.getCamera().combined);
 
@@ -382,32 +395,23 @@ public class GameScreen implements Screen {
         float worldHeight = uiStage.getViewport().getWorldHeight();
 
         font.setColor(Color.WHITE);
-        // Teks Kills
         font.draw(uiStage.getBatch(), "Kills: " + killCount + " / " + KILL_TARGET, 20, worldHeight - 20);
-        // Teks Dash
         font.draw(uiStage.getBatch(), player.getDashStatusString(), 20, worldHeight - 40);
 
         // --- HEAL UI LOGIC ---
-        // Gambar Icon Heal di samping teks (misal geser 250 pixel ke kanan)
         float healIconX = 150;
-        float healIconY = worldHeight - 90; // Posisi Y icon
-        float healIconSize = 90; // Ukuran icon 40x40
+        float healIconY = worldHeight - 90;
+        float healIconSize = 90;
 
         uiStage.getBatch().draw(healTexture, healIconX, healIconY, healIconSize, healIconSize);
 
-        // Gambar Counter Cooldown di bawah icon Heal
         if (player.healTimer > 0) {
             font.setColor(Color.YELLOW);
             String cdText = String.format("%.0f", player.healTimer);
             font.getData().setScale(2.0f);
-            // Gambar text (sesuaikan posisi X dan Y agar pas di tengah jika ukurannya berubah)
             font.draw(uiStage.getBatch(), cdText, healIconX + 35, healIconY + 10);
-
-            // [PENTING: KEMBALIKAN KE UKURAN NORMAL]
-            // Wajib di-reset ke 1.0f agar tulisan lain (seperti Kills/Dialog) tidak ikut membesar
             font.getData().setScale(1.0f);
         }
-        // ---------------------
 
         // Dialog text
         if (currentState == GameState.DIALOG) {
@@ -488,7 +492,12 @@ public class GameScreen implements Screen {
         npcSheet.dispose();
         bulletTexture.dispose();
         shieldTexture.dispose();
-        healTexture.dispose(); // Dispose heal texture
-    }
+        healTexture.dispose();
 
+        // Dispose Sound
+        s_shot.dispose();
+        s_hit.dispose();
+        s_dash.dispose();
+        s_heal.dispose(); // <-- Dispose sound heal
+    }
 }
