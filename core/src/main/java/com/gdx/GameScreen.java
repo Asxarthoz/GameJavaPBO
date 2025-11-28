@@ -112,7 +112,7 @@ public class GameScreen implements Screen {
         enemyShoot = new Texture("shooter/Soldier_1/Shot_1.png");
         enemyDie   = new Texture("shooter/Soldier_1/Dead.png");
         boss = new Boss(
-            1500, 0,
+            5100, 0,
             new Texture("Standing.png"),
             new Texture("Run.png"),
             new Texture("Roll.png"),
@@ -233,7 +233,7 @@ public class GameScreen implements Screen {
                 if (!en.hasCountedKill()) {
                     en.setCountedKill(true);
                     killCount++;
-                    if (killCount >= 1 && !boss.active) {
+                    if (killCount >= KILL_TARGET && !boss.active) {
                         boss.setActive(true);
                         boss.state = Boss.State.RUN;
                     }
