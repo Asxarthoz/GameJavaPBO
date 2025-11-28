@@ -37,7 +37,7 @@ public class Bullet extends Actor {
         // tabrak player
         if (target != null && rect.overlaps(target.getHitbox())) {
             // jika player shield aktif, peluru hilang tanpa damage
-            if (!target.isShielding) {
+            if (!target.isShielding &&  target.health > 0) {
                 target.health -= 10;
                 if (target.health < 0) target.health = 0;
             }

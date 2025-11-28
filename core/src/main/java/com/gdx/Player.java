@@ -10,6 +10,8 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 
+//import static com.gdx.Main.WORLD_WIDTH;
+
 /**
  * Player: movement, attack, shield, dash, and heal mechanics.
  */
@@ -200,8 +202,14 @@ public class Player extends Actor {
         setY(getY() + velocityY * delta);
         if (getY() <= 0) { setY(0); velocityY = 0; isGround = true; }
 
+        // CLAMP
+        if (getX() < 0) setX(0); // batas kiri
+//        if (getX() + getWidth() > WORLD_WIDTH) setX(WORLD_WIDTH - getWidth()); // batas kanan
+        if (health > MAX_HEALTH) health = MAX_HEALTH;
+        if (health < 0) health = 0f;
+
         // Update hitbox
-        hitbox.setPosition(getX() + 20, getY());
+        hitbox.setPosition(getX() + 15, getY());
     }
 
     /**

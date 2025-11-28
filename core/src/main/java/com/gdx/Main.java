@@ -55,7 +55,7 @@ public class Main extends ApplicationAdapter {
     private NPC npc;
     private Array<Enemy> enemies = new Array<>();
     private Array<Bullet> bullets = new Array<>();
-    private Array<BossBullet> bossBullets = new Array<>();
+    private Array<Bullet> bossBullets = new Array<>();
     private Boss boss;
     private Array<Bomb> bossBombs = new Array<>();
     private Array<Explosion> explosions = new Array<>();
@@ -123,12 +123,12 @@ public class Main extends ApplicationAdapter {
         gameStage.addActor(npc);
 
         boss = new Boss(
-                5200, 0,
+                1500, 0,
                 new Texture("Standing.png"),
                 new Texture("Run.png"),
                 new Texture("Roll.png"),
                 new Texture("bullet.png"),
-                1f, s_shot
+                4.25f, s_shot
         );
         boss.setBulletsArray(bossBullets);
         boss.setBombsArray(bossBombs);
@@ -156,9 +156,8 @@ public class Main extends ApplicationAdapter {
         for (Enemy e : enemies) e.remove();
         enemies.clear();
         for (int i = 0; i < WAVE_SIZE; i++) {
-            int x = (killCount == 0) ? rand.nextInt(1000, 2000) : rand.nextInt(0, 2000);
+            int x = (killCount == 0) ? rand.nextInt(1000, 2000) : rand.nextInt(200, 2000);
             float scale = 2f;
-
             Enemy e = new Enemy(x, 0, idleFrames, walkFrames, runFrames, shootFrames, dieFrames, scale);
             gameStage.addActor(e);
             enemies.add(e);
@@ -218,15 +217,14 @@ public class Main extends ApplicationAdapter {
             }
         }
 
-
         // Process dead enemies
         for (int i = enemies.size - 1; i >= 0; i--) {
             Enemy en = enemies.get(i);
-            if (en.dead && en.deathTime >= 1f) {
+            if (en.isDead()) {
                 if (!en.hasCountedKill()) {
                     en.setCountedKill(true);
                     killCount++;
-                    if (killCount >= 20 && !boss.active) {
+                    if (killCount >= 1 && !boss.active) {
                         boss.setActive(true);
                         boss.state = Boss.State.RUN;
                     }
@@ -275,23 +273,6 @@ public class Main extends ApplicationAdapter {
                 bullets.removeIndex(i);
             }
         }
-
-        for (int i = bossBullets.size - 1; i >= 0; i--) {
-            BossBullet b = bossBullets.get(i);
-            b.update(delta);
-
-            if (b.rect.overlaps(player.hitbox)) {
-                if (player.isShielding) {
-                    bossBullets.removeIndex(i);
-                    continue;
-                }
-                if(player.health > 0) player.health -= 20;
-
-                bossBullets.removeIndex(i);
-                continue;
-            }
-        }
-
         // ==== BOMB UPDATE ====
 
         for (int i = bossBombs.size - 1; i >= 0; i--) {
@@ -300,7 +281,7 @@ public class Main extends ApplicationAdapter {
 
             // Jika bomb kena shield
             if (b.rect.overlaps(player.hitbox) && player.isShielding) {
-                explosions.add(new Explosion(b.rect.x, b.rect.y, boss.explosionAnim));
+                explosions.add(new Explosion(b.rect.x + 25, b.rect.y + 25, boss.getExplosionAnim()));
                 bossBombs.removeIndex(i);
                 continue;
             }
@@ -309,18 +290,25 @@ public class Main extends ApplicationAdapter {
             if (b.rect.overlaps(player.hitbox) && !player.isShielding) {
                 // ga langsung meledak, tetap countdown
                 player.health -= 20;
+                if (player.health < 0) player.health = 0;
             }
 
             // Waktu habis → otomatis meledak
             if (b.exploded) {
-                explosions.add(new Explosion(b.rect.x, b.rect.y, boss.explosionAnim));
+                explosions.add(new Explosion(b.rect.x + 25, b.rect.y + 25, boss.getExplosionAnim()));
+                s_hit.play();
                 bossBombs.removeIndex(i);
             }
         }
-
+        // == EXPLOSION ==
         for (int i = explosions.size - 1; i >= 0; i--) {
             Explosion ex = explosions.get(i);
             ex.update(delta);
+
+            if (ex.life <= 0) {
+                explosions.removeIndex(i);
+                continue;
+            }
 
             // Hit check radius 300
             float dx = (player.hitbox.x + player.hitbox.width/2) - ex.x;
@@ -328,7 +316,9 @@ public class Main extends ApplicationAdapter {
             float dist = (float)Math.sqrt(dx*dx + dy*dy);
 
             if (!ex.hasDamaged && dist <= ex.radius) {
-                player.health -= 50;
+                if (!player.isShielding && player.health > 0) {
+                    player.health -= 40;
+                }
                 ex.hasDamaged = true;
             }
 
@@ -353,6 +343,25 @@ public class Main extends ApplicationAdapter {
 
         // draw stages
         gameStage.draw();
+
+        // boss batch
+        batch.begin();
+        for (Bomb b : bossBombs) {
+            if (!b.exploded) batch.draw(b.sprite, b.rect.x, b.rect.y, 50, 50);
+        }
+        for (int i = explosions.size - 1; i >= 0; i--) {
+            Explosion ex = explosions.get(i);
+            ex.update(delta);
+
+            if (ex.life <= 0) {
+                explosions.removeIndex(i);
+                continue;
+            }
+
+            TextureRegion frame = ex.getFrame();
+            batch.draw(frame, ex.x - 64, ex.y - 64, 128, 128); // 128×128 explosion, centered
+        }
+        batch.end();
 
         // --- HUD SECTION ---
         // Hitung posisi pojok kiri atas layar berdasarkan kamera
@@ -405,7 +414,7 @@ public class Main extends ApplicationAdapter {
         if (boss.active) {
             float pct = boss.hp / boss.maxHp;
             shapeR.setColor(Color.RED);
-            shapeR.rect(boss.getX(), boss.getY() + boss.getHitbox().height + 20, 200 * pct, 15);
+            shapeR.rect(boss.getHitbox().x, boss.getHitbox().y + boss.getHitbox().height + 5, boss.getHitbox().width * pct, 12);
         }
 
         // Enemy HP

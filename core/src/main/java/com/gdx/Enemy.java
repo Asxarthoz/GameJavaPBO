@@ -166,6 +166,7 @@ public class Enemy extends Actor {
 
         updateHitbox();
         prevState = state;
+        clampPosition();
     }
 
     private Player findPlayer() {
@@ -178,6 +179,11 @@ public class Enemy extends Actor {
         return getX() + getWidth() / 2f;
     }
 
+    private void clampPosition() {
+        if (getX() < 0) setX(0);
+        if (getX() + getWidth() > 5000) setX(5000 - getWidth());
+    }
+
     private void chasePlayer(Player player, float delta) {
         float playerCenter = player.getHitbox().x + player.getHitbox().width / 2f;
         if (playerCenter > getCenterX()) {
@@ -187,15 +193,7 @@ public class Enemy extends Actor {
             setX(getX() - speed * 1.5f * delta);
             facingRight = false;
         }
-    }
-
-    public boolean isReadyToShoot() {
-        // (tetap tersedia untuk kompatibilitas lama) — gunakan shouldFire() agar sinkron animasi
-        if (!detectedPlayer || delayTimer < detectDelay) return false;
-        Player p = findPlayer();
-        if (p == null) return false;
-        float dist = Math.abs(getCenterX() - (p.getHitbox().x + p.getHitbox().width/2f));
-        return dist <= 250f && canShoot();
+        clampPosition();
     }
 
     /** Dipanggil dari Main: return true sekali saat animasi tembak mencapai titik melepaskan peluru */
@@ -218,6 +216,7 @@ public class Enemy extends Actor {
             setX(getX() - speed * delta);
             if (getX() <= patrolTargetX) pickNewPatrolTarget();
         }
+        clampPosition();
     }
 
     private void pickNewPatrolTarget() {
@@ -226,7 +225,7 @@ public class Enemy extends Actor {
             patrolTargetX = getX() + move;
             facingRight = true;
         } else {
-            patrolTargetX = getX() - move;
+            patrolTargetX = Math.max(0, getX() - move);
             facingRight = false;
         }
     }
