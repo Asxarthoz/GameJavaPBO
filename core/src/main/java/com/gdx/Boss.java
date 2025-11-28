@@ -32,13 +32,17 @@ class Bomb {
             exploded = true;
         }
     }
+
+    public void draw(Batch batch) {
+        if (sprite != null) batch.draw(sprite, rect.x, rect.y, rect.width, rect.height);
+    }
 }
 
 class Explosion {
     public boolean hasDamaged = false;
     public float x, y;
     public float life = 0.3f;
-    public float radius = 100f;  // kurangi dari 200 jadi 100 biar fair
+    public float radius = 100f;
 
     float stateTime = 0f;
     Animation<TextureRegion> anim;
@@ -58,8 +62,6 @@ class Explosion {
         return anim.getKeyFrame(stateTime, false);
     }
 }
-
-// HAPUS CLASS BossBullet — PAKAI Bullet.java!
 
 public class Boss extends Actor {
     public float hp = 500f;
@@ -82,24 +84,24 @@ public class Boss extends Actor {
     // Bomb & Explosion
     private float bombCooldown = 0f;
     private float bombCooldownMax = 5f;
-    private float bombSpeed = 400f;
     private TextureRegion bombTex;
     private Animation<TextureRegion> explosionAnim;
 
     // Roll mechanics
     private float rollCooldown = 0f;
-    private float rollCooldownMax = 10f;
-    private float rollSpeed = 400f;
+    private float rollCooldownMax = 12f;
+    private float rollSpeed = 450f; // tweak supaya terasa dash
     private boolean rolling = false;
     private int rollDirection = 1;
     private float rollDistanceLeft = 0f;
+    private boolean rollHasDamaged = false;
 
     // Shoot mechanics
     private TextureRegion bulletTex;
     private Sound shootSound;
 
     // Injected arrays from Main
-    private Array<Bullet> bullets;  // GANTI JADI Array<Bullet>!
+    private Array<Bullet> bullets;
     private Array<Bomb> bombs;
     private float shootCooldown = 0f;
     private float shootCooldownMax = 2.8f;
@@ -114,17 +116,17 @@ public class Boss extends Actor {
         // Idle frame
         idleFrame = new TextureRegion(idleTex);
 
-        // Run animation
+        // Run animation (4 frames)
         TextureRegion[][] tmp = TextureRegion.split(runTex, runTex.getWidth() / 4, runTex.getHeight());
         TextureRegion[] runFrames = new TextureRegion[4];
         for (int i = 0; i < 4; i++) runFrames[i] = tmp[0][i];
         runAnim = new Animation<>(0.08f, runFrames);
 
-        // Roll animation
+        // Roll animation (8 frames)
         tmp = TextureRegion.split(rollTex, rollTex.getWidth() / 8, rollTex.getHeight());
         TextureRegion[] rollFrames = new TextureRegion[8];
         for (int i = 0; i < 8; i++) rollFrames[i] = tmp[0][i];
-        rollAnim = new Animation<>(0.1f, rollFrames);
+        rollAnim = new Animation<>(0.08f, rollFrames);
 
         // Bomb texture
         bombTex = new TextureRegion(new Texture("bomb.png"));
@@ -149,6 +151,18 @@ public class Boss extends Actor {
         super.act(delta);
         if (!active) return;
 
+        // Jika sedang roll: prioritaskan roll (isolasi perilaku)
+        if (rolling) {
+            stateTime += delta;
+            bombCooldown -= delta;
+            rollCooldown -= delta;
+            doRoll(delta);
+            updateHitbox();
+            clampPosition();
+            return; // penting: hentikan logic lain selama roll
+        }
+
+        // Normal flow
         stateTime += delta;
         bombCooldown -= delta;
         rollCooldown -= delta;
@@ -156,31 +170,25 @@ public class Boss extends Actor {
         Player p = getStage().getRoot().findActor("player");
         if (p == null) return;
 
-        float bossCenter = getX() + getWidth() / 2;
-        float targetCenter = p.getX() + p.getWidth() / 2;
+        float bossCenter = getX() + getWidth() / 2f;
+        float targetCenter = p.getX() + p.getWidth() / 2f;
         facingRight = targetCenter > bossCenter;
 
         float dist = Math.abs(targetCenter - bossCenter);
         if (dist <= 800f) {
-            // Kalau player terlalu jauh dari 300px → kejar lagi
             if (dist > 300f) {
                 chasePlayer(targetCenter, bossCenter, delta);
-            }
-            // Kalau sudah dekat (≤ 300px) → berhenti gerak, fokus serang
-            else {
-                state = State.IDLE;  // berhenti lari, pose idle
+            } else {
+                state = State.IDLE; // dekat → berhenti jalan, siap serang
             }
 
-            // SERANGAN (prioritas lebih tinggi dari chase)
-            if (bombCooldown <= 0 && MathUtils.randomBoolean(0.25f)) {
+            // Serangan: prioritas bomb → roll → burst shoot
+            if (bombCooldown <= 0f && MathUtils.randomBoolean(0.25f)) {
                 spawnBomb(targetCenter);
                 bombCooldown = bombCooldownMax;
-            }
-            else if (rollCooldown <= 0 && MathUtils.randomBoolean(0.35f) && dist <= 400f) {
+            } else if (rollCooldown <= 0f && MathUtils.randomBoolean(0.35f) && dist <= 400f) {
                 startRoll(targetCenter, bossCenter);
-            }
-            else if (dist <= 300f) {
-                // BURST SHOOT — cuma kalau player deket banget
+            } else if (dist <= 300f) {
                 if (burstCount == 0 && shootCooldown <= 0f) {
                     burstCount = 3;
                     burstTimer = 0f;
@@ -190,29 +198,27 @@ public class Boss extends Actor {
             }
         }
 
+        // Burst handling
         if (burstCount > 0) {
             burstTimer -= delta;
             if (burstTimer <= 0f) {
                 spawnShoot(p);
                 burstCount--;
                 burstTimer = burstInterval;
-                if (burstCount == 0) {
-                    shootCooldown = shootCooldownMax;
-                }
+                if (burstCount == 0) shootCooldown = shootCooldownMax;
             }
         } else if (shootCooldown > 0f) {
             shootCooldown -= delta;
         }
 
-        if (rolling) doRoll(delta);
         updateHitbox();
         clampPosition();
     }
 
     private void spawnBomb(float targetX) {
-        float bx = getX() + getWidth() / 2;
-        float by = getY() + getHeight() / 2;
-        bombs.add(new Bomb(bx, by, targetX, bombTex));
+        float bx = getX() + getWidth() / 2f;
+        float by = getY() + getHeight() / 2f;
+        if (bombs != null) bombs.add(new Bomb(bx, by, targetX, bombTex));
     }
 
     private void chasePlayer(float targetCenter, float bossCenter, float delta) {
@@ -224,19 +230,34 @@ public class Boss extends Actor {
 
     private void clampPosition() {
         if (getX() < 0) setX(0);
+        // 5000 adalah contoh arena width — sesuaikan kalau perlu
         if (getX() + getWidth() > 5000) setX(5000 - getWidth());
     }
 
     private void updateHitbox() {
-        hitbox.setPosition(getX() + getWidth() * 0.25f, getY() + getHeight() * 0.001f);
+        if (!rolling) {
+            hitbox.setSize(getWidth() * 0.45f, getHeight() * 0.55f);
+            hitbox.setPosition(getX() + getWidth() * 0.25f, getY() + getHeight() * 0.001f);
+        } else {
+            // saat roll, kita gunakan hitbox lebih tipis dan sedikit maju ke depan
+            float newW = getWidth() * 0.9f;
+            float newH = getHeight() * 0.6f;
+            hitbox.setSize(newW * 0.45f, newH * 0.55f);
+            hitbox.setPosition(getX() + getWidth() * 0.05f * (rollDirection == 1 ? 1 : 0.1f), getY() + getHeight() * 0.1f);
+        }
     }
 
     private void startRoll(float targetCenter, float bossCenter) {
         rolling = true;
         state = State.ROLL;
         rollDirection = (targetCenter > bossCenter) ? 1 : -1;
-        rollDistanceLeft = 300f;
+        rollDistanceLeft = 420f;
         rollCooldown = rollCooldownMax;
+
+        // sinkron animasi & orientasi supaya roll terlihat benar
+        stateTime = 0f;
+        facingRight = (rollDirection == 1);
+        rollHasDamaged = false;
     }
 
     private void doRoll(float delta) {
@@ -244,11 +265,25 @@ public class Boss extends Actor {
         if (move > rollDistanceLeft) move = rollDistanceLeft;
         setX(getX() + move * rollDirection);
         rollDistanceLeft -= move;
-        if (rollDistanceLeft <= 0) {
+
+        // contoh: single-contact damage selama roll (opsional)
+        // jika ingin aktifkan, pastikan Player punya method yang sesuai (mis. getBounds() dan takeDamage())
+        /*
+        Player p = getStage().getRoot().findActor("player");
+        if (p != null && !rollHasDamaged) {
+            if (hitbox.overlaps(p.getBounds())) {
+                p.takeDamage(25f); // sesuaikan nama method & damage
+                rollHasDamaged = true;
+            }
+        }
+        */
+
+        if (rollDistanceLeft <= 0f) {
             rolling = false;
             state = State.IDLE;
+            rollHasDamaged = false;
+            updateHitbox(); // kembalikan hitbox normal
         }
-        hitbox.setPosition(getX(), getY());
         clampPosition();
     }
 
@@ -258,10 +293,11 @@ public class Boss extends Actor {
         float vel = facingRight ? 350f : -350f;
         if (shootSound != null) shootSound.play();
         if (bullets != null) {
-            Bullet bossBullet = new Bullet(bulletTex, bx, by, 40, 40, vel, 0, target);  // pakai Bullet!
-            bossBullet.rotation = facingRight ? 0 : 180;  // flip kalau kiri
+            Bullet bossBullet = new Bullet(bulletTex, bx, by, 40, 40, vel, 0, target);
+            bossBullet.rotation = facingRight ? 0 : 180;
             bullets.add(bossBullet);
-            getStage().addActor(bossBullet);  // add ke stage
+            // bossBullet harus ditambahkan ke stage dari luar (Main) atau kamu bisa uncomment baris berikut
+            // getStage().addActor(bossBullet);
         }
     }
 
@@ -285,7 +321,7 @@ public class Boss extends Actor {
         if (!facingRight && !r.isFlipX()) r.flip(true, false);
         if (facingRight && r.isFlipX()) r.flip(true, false);
 
-        batch.draw(r, getX(), getY() - 20f, getWidth(), getHeight());  // tambah -20f biar kaki nempel tanah
+        batch.draw(r, getX(), getY() - 20f, getWidth(), getHeight());
     }
 
     public Rectangle getHitbox() { return hitbox; }

@@ -1,5 +1,19 @@
+Heal_Icon.png
+Hero_Intro.png
+Hero_Intro1.png
+Hero_Intro_retro.png
+LoadScreen1.png
+LoadScreen1.webp
+LoadScreen2.png
+LoadScreen2.webp
+LoadScreen3.png
+LoadScreen3.webp
+LoadScreen4.png
+LoadScreen4.webp
+PerjuanganKemerdekaan.png
 Roll.png
 Run.png
+Shield_Icon.png
 Standing.png
 attackSpriteC.png
 bg.png
@@ -9,6 +23,7 @@ bullet.png
 enemy.png
 grass.jpg
 heal.png
+hero.png
 kunai.png
 libgdx.png
 logo.png
