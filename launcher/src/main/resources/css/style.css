@@ -90,6 +90,12 @@
     -fx-font-weight: bold;
 }
 
+.text3{
+    -fx-font-family: "Poppins";
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
 .cardButton {
 
     -fx-background-color: #a88d32;

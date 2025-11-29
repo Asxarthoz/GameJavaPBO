@@ -194,7 +194,7 @@ public class Main extends Application {
         ImageView img1 = new ImageView(new Image(getClass().getResource("/images/mataramislam.jpg").toExternalForm()));
         img1.setFitWidth(300);
         img1.setPreserveRatio(true);
-        Label text1 = new Label("Kerajaan Mataram Islam ... (ringkasan sejarah)");
+        Label text1 = new Label("Kerajaan Mataram Islam didirikan pada akhir abad ke-16\n oleh Sutawijaya (Panembahan Senopati) \ndi Kotagede, Yogyakarta. Kerajaan ini mencapai kejayaan di bawah Sultan Agung\n pada abad ke-17 dan menjadi kekuatan besar di Jawa, \nlalu mengalami kemunduran karena konflik internal dan campur tangan VOC. \nAkhirnya, kerajaan ini terpecah menjadi dua pada \ntahun 1755 melalui Perjanjian Giyanti, \nyaitu Kesultanan Yogyakarta dan Kasunanan Surakarta.");
         text1.getStyleClass().add("text1");
         card1.getChildren().addAll(img1, text1);
 
@@ -209,11 +209,24 @@ public class Main extends Application {
         Label text2 = new Label("Chapter 1 : Si Kembar dari Mataram");
         text2.getStyleClass().add("text2");
 
+        VBox card3 = new VBox(20);
+        card3.setAlignment(Pos.CENTER);
+        card3.setStyle("-fx-background-color: rgba(255,255,255,0.7); -fx-padding: 20px; -fx-background-radius: 20px;");
+        card3.setPrefSize(400, 500);
+
+        ImageView img3 = new ImageView(new Image(getClass().getResource("/images/coming.jpg").toExternalForm()));
+        img3.setFitWidth(300);
+        img3.setPreserveRatio(true);
+        Label text3 = new Label("Chapter 2 : Bagaimana kelanjutan kisah dari \nperjuangan rakyat Indonesia \ndemi meraih kemerdekaannya?\nTunggu Kelanjutannya!");
+        text3.getStyleClass().add("text3");
+        card3.getChildren().addAll(img3, text3);
+
+
         Button detailBtn = new Button("Mainkan!");
         detailBtn.getStyleClass().add("cardButton");
         card2.getChildren().addAll(img2, text2, detailBtn);
 
-        List<VBox> cards = List.of(card1, card2);
+        List<VBox> cards = List.of(card1, card2, card3);
         int[] currentCard = {0};
         StackPane cardContainer = new StackPane();
         cardContainer.setPrefSize(500, 550);
