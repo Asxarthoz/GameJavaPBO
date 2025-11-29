@@ -1,0 +1,111 @@
+.captionZejarah {
+    -fx-font-family: "Poppins";
+    -fx-font-size: 30px;
+    -fx-font-weight: bold;
+}
+
+.buttonExplore {
+    -fx-background-color: #a88d32;
+    -fx-text-fill: white;
+    -fx-font-family: "Poppins";
+    -fx-font-size: 28px;
+    -fx-font-weight: bold;
+    -fx-padding: 30px 80px;
+    -fx-background-radius: 12px;
+    -fx-cursor: hand;
+
+    /* Animasi hover */
+    -fx-transition: 0.3s;
+}
+
+.buttonExplore:hover {
+    -fx-background-color: #78662b;
+}
+
+.buttonNextVid {
+    -fx-background-color: #a88d32;
+    -fx-font-weight: bold;
+    -fx-text-fill: white;
+    -fx-font-size: 18px;
+
+    -fx-min-width: 80px;
+    -fx-min-height: 80px;
+
+    -fx-max-width: 80px;
+    -fx-max-height: 80px;
+
+    -fx-background-radius: 100%;     /* biar bener-bener bulat */
+}
+
+.buttonNextVid:hover {
+    -fx-background-color: #78662b;
+}
+
+.btnPrevVid {
+    -fx-background-color: #a88d32;
+    -fx-font-weight: bold;
+    -fx-text-fill: white;
+    -fx-font-size: 18px;
+
+    -fx-min-width: 80px;
+    -fx-min-height: 80px;
+
+    -fx-max-width: 80px;
+    -fx-max-height: 80px;
+
+    -fx-background-radius: 100%;     /* biar bener-bener bulat */
+}
+
+.btnPrevVid:hover {
+    -fx-background-color: #78662b;
+}
+
+.btnPlay {
+
+    -fx-background-color: #a88d32;
+    -fx-font-weight: bold;
+    -fx-text-fill: white;
+    -fx-font-size: 28px;
+
+    -fx-min-width: 180px;
+    -fx-min-height: 80px;
+
+    -fx-max-width: 80px;
+    -fx-max-height: 80px;
+}
+
+.btnPlay:hover {
+    -fx-background-color: #78662b;
+}
+
+.text1 {
+    -fx-font-family: "Poppins";
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.text2{
+    -fx-font-family: "Poppins";
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.cardButton {
+
+    -fx-background-color: #a88d32;
+    -fx-text-fill: white;
+    -fx-font-family: "Poppins";
+    -fx-font-size: 28px;
+    -fx-font-weight: bold;
+    -fx-padding: 30px 80px;
+    -fx-background-radius: 12px;
+    -fx-cursor: hand;
+
+    /* Animasi hover */
+    -fx-transition: 0.3s;
+
+}
+
+.cardButton:hover {
+    -fx-background-color: #78662b;
+}
