@@ -67,7 +67,7 @@ public class NPC extends Actor {
                 break;
             case LEAVING:
                 moveBy(-speed * delta, 0);
-                if (getX() <= -250) { setX(-250); state = State.IDLE;}
+                if (getX() <= -300) { setX(-300); state = State.IDLE;}
                 break;
             case IDLE:
                 break;

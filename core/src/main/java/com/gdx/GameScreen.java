@@ -235,10 +235,12 @@ public class GameScreen implements Screen {
 
         if (player.isAttack && boss.active) {
             Rectangle atk = player.getAttackHitbox();
-            if (atk != null && atk.overlaps(boss.hitbox)) {
-                boss.hp -= 30;
+            if (atk != null && atk.overlaps(boss.hitbox) && !player.hitRegistered) {
+                boss.takeDamage(30);
+                player.hitRegistered = true;
             }
         }
+
 
         // Process dead enemies
         for (int i = enemies.size - 1; i >= 0; i--) {

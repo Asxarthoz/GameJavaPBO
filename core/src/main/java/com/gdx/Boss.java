@@ -108,6 +108,14 @@ public class Boss extends Actor {
     private int burstCount = 0;
     private float burstTimer = 0f;
     private float burstInterval = 0.18f;
+    public float dmgCooldown = 0f;
+
+    public void takeDamage(float dmg) {
+        if (dmgCooldown > 0) return;
+        hp -= dmg;
+        dmgCooldown = 0.3f;
+    }
+
 
     public Boss(float x, float y, Texture idleTex, Texture runTex, Texture rollTex, Texture bulletTex, float scale, Sound shootSound) {
         this.shootSound = shootSound;
@@ -150,6 +158,10 @@ public class Boss extends Actor {
     public void act(float delta) {
         super.act(delta);
         if (!active) return;
+        // RESETABLE DAMAGE COOLDOWN
+        if (dmgCooldown > 0)
+            dmgCooldown -= delta;
+
 
         // Jika sedang roll: prioritaskan roll (isolasi perilaku)
         if (rolling) {
@@ -296,9 +308,9 @@ public class Boss extends Actor {
             Bullet bossBullet = new Bullet(bulletTex, bx, by, 40, 40, vel, 0, target);
             bossBullet.rotation = facingRight ? 0 : 180;
             bullets.add(bossBullet);
-            // bossBullet harus ditambahkan ke stage dari luar (Main) atau kamu bisa uncomment baris berikut
-            // getStage().addActor(bossBullet);
+            getStage().addActor(bossBullet);   // ← WAJIB!
         }
+
     }
 
     @Override

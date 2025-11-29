@@ -138,3 +138,4 @@ trader/Trader_3/Dialogue.png
 trader/Trader_3/Idle.png
 trader/Trader_3/Idle_2.png
 trader/Trader_3/Idle_3.png
+video/video.mp4
