@@ -123,7 +123,6 @@ public class GameScreen implements Screen {
         enemyShoot = new Texture("shooter/Soldier_1/Shot_1.png");
         enemyDie   = new Texture("shooter/Soldier_1/Dead.png");
 
-        // Pastikan class Boss sudah ada constructornya yang sesuai
         boss = new Boss(
             5100, 0,
             new Texture("Standing.png"),

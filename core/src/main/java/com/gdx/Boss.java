@@ -198,9 +198,9 @@ public class Boss extends Actor {
             if (bombCooldown <= 0f && MathUtils.randomBoolean(0.25f)) {
                 spawnBomb(targetCenter);
                 bombCooldown = bombCooldownMax;
-            } else if (rollCooldown <= 0f && MathUtils.randomBoolean(0.35f) && dist <= 400f) {
+            } else if (rollCooldown <= 0f && MathUtils.randomBoolean(0.35f) && dist <= 300f) {
                 startRoll(targetCenter, bossCenter);
-            } else if (dist <= 300f) {
+            } else if (dist <= 350f) {
                 if (burstCount == 0 && shootCooldown <= 0f) {
                     burstCount = 3;
                     burstTimer = 0f;
@@ -300,17 +300,21 @@ public class Boss extends Actor {
     }
 
     private void spawnShoot(Player target) {
-        float bx = getX() + (facingRight ? 70 : -20);
-        float by = getY() + hitbox.height * 0.45f + MathUtils.random(-10f, 10f);
-        float vel = facingRight ? 350f : -350f;
-        if (shootSound != null) shootSound.play();
+        float pistolOffsetX = getWidth() * 0.14f;
+        float pistolHeightY = getHeight() * 0.22f;
+        float spawnX = getX() + getWidth() / 2f;
+        spawnX += facingRight ? pistolOffsetX : -pistolOffsetX;
+        float spawnY = getY() + pistolHeightY + MathUtils.random(-8f, 8f);
+        float vel = facingRight ? 380f : -380f;
+
+        if (shootSound != null) shootSound.play(0.9f);
+
         if (bullets != null) {
-            Bullet bossBullet = new Bullet(bulletTex, bx, by, 40, 40, vel, 0, target);
+            Bullet bossBullet = new Bullet(bulletTex, spawnX, spawnY, 40, 40, vel, 0, target);
             bossBullet.rotation = facingRight ? 0 : 180;
             bullets.add(bossBullet);
-            getStage().addActor(bossBullet);   // ← WAJIB!
+            getStage().addActor(bossBullet);
         }
-
     }
 
     @Override
