@@ -4,6 +4,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.Screen;
+import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Camera;
 import com.badlogic.gdx.graphics.Color;
@@ -36,6 +37,7 @@ public class GameScreen implements Screen {
     // Wave and kill tracking
     private int killCount = 0;
     private static final int KILL_TARGET = 20;
+    private static final int WIN_TARGET = 21; // Target untuk menang
     private static final int WAVE_SIZE = 4;
 
     // Core rendering utilities
@@ -56,9 +58,14 @@ public class GameScreen implements Screen {
 
     // --- SOUND VARIABLES ---
     Sound s_shot, s_hit, s_dash;
-    Sound s_heal; // <-- Variabel Sound Heal Baru
+    Sound s_heal;
+    Sound s_die;
+
+    // --- MUSIC VARIABLES ---
+    Music bossMusic;
 
     private Texture healTexture;
+    private Texture gameOverTexture;
 
     // Game objects collections
     private Player player;
@@ -100,12 +107,16 @@ public class GameScreen implements Screen {
         shapeR = new ShapeRenderer();
         font = new BitmapFont();
 
-        // Load Sound
-        // Pastikan nama file di folder assets/sound/ adalah "heal.mp3"
+        // Load Sound (SFX)
         s_shot = Gdx.audio.newSound(Gdx.files.internal("sound/shot.mp3"));
         s_hit = Gdx.audio.newSound(Gdx.files.internal("sound/hit.mp3"));
         s_dash = Gdx.audio.newSound(Gdx.files.internal("sound/dash.mp3"));
-        s_heal = Gdx.audio.newSound(Gdx.files.internal("sound/heal.ogg")); // <-- Load Sound Heal
+        s_heal = Gdx.audio.newSound(Gdx.files.internal("sound/heal.ogg"));
+        s_die = Gdx.audio.newSound(Gdx.files.internal("sound/mati.ogg"));
+
+        // Load Music (Boss)
+        bossMusic = Gdx.audio.newMusic(Gdx.files.internal("sound/boss.ogg"));
+        bossMusic.setLooping(true);
 
         // Load textures once
         background = new Texture("bg.png");
@@ -117,6 +128,8 @@ public class GameScreen implements Screen {
         shieldTexture = new Texture("shield.png");
         shieldRegion = new TextureRegion(shieldTexture);
         healTexture = new Texture("heal.png");
+        gameOverTexture = new Texture("gameover.png");
+
         enemyIdle  = new Texture("shooter/Soldier_1/Idle.png");
         enemyWalk  = new Texture("shooter/Soldier_1/Walk.png");
         enemyRun   = new Texture("shooter/Soldier_1/Run.png");
@@ -142,7 +155,6 @@ public class GameScreen implements Screen {
         Gdx.input.setInputProcessor(im);
 
         // Create main actor and NPC
-        // UPDATE: Menambahkan s_heal ke parameter constructor Player
         player = new Player(100, 0, playerSheet, playerSheet, s_hit, s_dash, s_heal, shieldRegion);
         player.setName("player");
         gameStage.addActor(player);
@@ -192,162 +204,172 @@ public class GameScreen implements Screen {
         float delta = Gdx.graphics.getDeltaTime();
         stateTime += delta;
 
-        // Update phase
-        if (currentState == GameState.DIALOG) {
-            player.updateDialog(delta);
+        // --- CEK GAME OVER ---
+        if (player.health <= 0 && currentState != GameState.GAMEOVER) {
+            currentState = GameState.GAMEOVER;
+            s_die.play();
+            if (bossMusic.isPlaying()) bossMusic.stop();
         }
-        gameStage.act(delta);
-        uiStage.act(delta);
 
-        // Enemies shoot
-        for (Enemy e : enemies) {
-            if (e.shouldFire()) {
-                shootFromEnemy(e);
-                e.lastShootTime = TimeUtils.nanoTime();
+        // --- UPDATE LOGIC (Hanya jalan jika TIDAK gameover) ---
+        if (currentState != GameState.GAMEOVER) {
+
+            // Update phase
+            if (currentState == GameState.DIALOG) {
+                player.updateDialog(delta);
             }
-        }
+            gameStage.act(delta);
+            uiStage.act(delta);
 
-        // Dialog progression
-        if (currentState == GameState.DIALOG) {
-            if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
-                dialogIndex++;
-                if (dialogIndex >= dialogList.length) {
-                    npc.startLeave();
-                    currentState = GameState.EXPLORE;
+            // Enemies shoot
+            for (Enemy e : enemies) {
+                if (e.shouldFire()) {
+                    shootFromEnemy(e);
+                    e.lastShootTime = TimeUtils.nanoTime();
                 }
             }
-        }
 
-        // Player attack detection
-        if (player.isAttack) {
-            Rectangle atk = player.getAttackHitbox();
-            if (atk != null && !player.hitRegistered) {
-                for (Enemy e : enemies) {
-                    if (!e.dead && atk.overlaps(e.getHitbox())) {
-                        e.takeDamage(100);
-                        player.hitRegistered = true;
-                        break;
+            // Dialog progression
+            if (currentState == GameState.DIALOG) {
+                if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
+                    dialogIndex++;
+                    if (dialogIndex >= dialogList.length) {
+                        npc.startLeave();
+                        currentState = GameState.EXPLORE;
                     }
                 }
             }
-        }
 
-        if (player.isAttack && boss.active) {
-            Rectangle atk = player.getAttackHitbox();
-            if (atk != null && atk.overlaps(boss.hitbox) && !player.hitRegistered) {
-                boss.takeDamage(30);
-                player.hitRegistered = true;
+            // Player attack detection
+            if (player.isAttack) {
+                Rectangle atk = player.getAttackHitbox();
+                if (atk != null && !player.hitRegistered) {
+                    for (Enemy e : enemies) {
+                        if (!e.dead && atk.overlaps(e.getHitbox())) {
+                            e.takeDamage(100);
+                            player.hitRegistered = true;
+                            break;
+                        }
+                    }
+                }
             }
-        }
+
+            if (player.isAttack && boss.active) {
+                Rectangle atk = player.getAttackHitbox();
+                if (atk != null && atk.overlaps(boss.hitbox) && !player.hitRegistered) {
+                    boss.takeDamage(30);
+                    player.hitRegistered = true;
+                }
+            }
 
 
-        // Process dead enemies
-        for (int i = enemies.size - 1; i >= 0; i--) {
-            Enemy en = enemies.get(i);
-            if (en.isDead()) {
-                if (!en.hasCountedKill()) {
-                    en.setCountedKill(true);
-                    killCount++;
-                    if (killCount >= KILL_TARGET && !boss.active) {
-                        boss.setActive(true);
-                        boss.state = Boss.State.RUN;
+            // Process dead enemies
+            for (int i = enemies.size - 1; i >= 0; i--) {
+                Enemy en = enemies.get(i);
+                if (en.isDead()) {
+                    if (!en.hasCountedKill()) {
+                        en.setCountedKill(true);
+                        killCount++;
+
+                        // --- LOGIKA MUNCUL BOSS & MUSIK ---
+                        if (killCount >= KILL_TARGET && !boss.active) {
+                            boss.setActive(true);
+                            boss.state = Boss.State.RUN;
+                            bossMusic.play();
+                        }
+
+                    }
+                    en.remove();
+                    enemies.removeIndex(i);
+                }
+            }
+
+            // --- LOGIKA BOSS MATI & END SCREEN ---
+            if (boss.active && boss.hp <= 0) {
+                boss.remove();
+                boss.active = false;
+
+                // Ubah kill count jadi 21 sesuai request
+                killCount = WIN_TARGET;
+                currentState = GameState.VICTORY;
+
+                // Matikan musik boss
+                if (bossMusic.isPlaying()) bossMusic.stop();
+
+                // Pindah ke EndScreen
+                game.setScreen(new EndScreen(game));
+                dispose(); // Bersihkan GameScreen
+                return;    // Hentikan render frame ini
+            }
+
+            // Spawn next wave
+            if (enemies.size == 0 && killCount < KILL_TARGET && currentState == GameState.EXPLORE) {
+                spawnWave();
+            }
+
+            // Bullets update
+            for (int i = bullets.size - 1; i >= 0; i--) {
+                Bullet b = bullets.get(i);
+                b.rect.x += b.velX * delta;
+                b.rect.y += b.velY * delta;
+
+                if (b.rect.overlaps(player.hitbox)) {
+                    if (player.isShielding) {
+                        bullets.removeIndex(i);
+                        continue;
                     }
 
-                }
-                en.remove();
-                enemies.removeIndex(i);
-            }
-        }
-        if (boss.active && boss.hp <= 0) {
-            boss.remove();
-            boss.active = false;
-            killCount++;
-            currentState = GameState.VICTORY;
-        }
-
-        // Spawn next wave
-        if (enemies.size == 0 && killCount < KILL_TARGET && currentState == GameState.EXPLORE) {
-            spawnWave();
-        }
-
-        // Victory
-        if (killCount >= KILL_TARGET + 1 && currentState != GameState.VICTORY) {
-            currentState = GameState.VICTORY;
-            System.out.println("Victory! Kills = " + killCount);
-        }
-        // Bullets update
-        for (int i = bullets.size - 1; i >= 0; i--) {
-            Bullet b = bullets.get(i);
-            b.rect.x += b.velX * delta;
-            b.rect.y += b.velY * delta;
-
-            if (b.rect.overlaps(player.hitbox)) {
-                // LOGIKA KEBAL SHIELD
-                if (player.isShielding) {
+                    if (player.health > 0) player.health -= 10;
                     bullets.removeIndex(i);
                     continue;
                 }
 
-                if (player.health > 0) player.health -= 10;
-                bullets.removeIndex(i);
-                continue;
-            }
-
-            if (b.rect.x < 0 || b.rect.x > WORLD_WIDTH || b.rect.y < 0 || b.rect.y > WORLD_HEIGHT) {
-                bullets.removeIndex(i);
-            }
-        }
-        // ==== BOMB UPDATE ====
-
-        for (int i = bossBombs.size - 1; i >= 0; i--) {
-            Bomb b = bossBombs.get(i);
-            b.update(delta);
-
-            // Jika bomb kena shield
-            if (b.rect.overlaps(player.hitbox) && player.isShielding) {
-                explosions.add(new Explosion(b.rect.x + 25, b.rect.y + 25, boss.getExplosionAnim()));
-                bossBombs.removeIndex(i);
-                continue;
-            }
-
-            // Jika bomb kena player tanpa shield
-            if (b.rect.overlaps(player.hitbox) && !player.isShielding) {
-                // ga langsung meledak, tetap countdown
-                player.health -= 20;
-                if (player.health < 0) player.health = 0;
-            }
-
-            // Waktu habis → otomatis meledak
-            if (b.exploded) {
-                explosions.add(new Explosion(b.rect.x + 25, b.rect.y + 25, boss.getExplosionAnim()));
-                s_hit.play();
-                bossBombs.removeIndex(i);
-            }
-        }
-        // == EXPLOSION ==
-        for (int i = explosions.size - 1; i >= 0; i--) {
-            Explosion ex = explosions.get(i);
-            ex.update(delta);
-
-            if (ex.life <= 0) {
-                explosions.removeIndex(i);
-                continue;
-            }
-
-            // Hit check radius 300
-            float dx = (player.hitbox.x + player.hitbox.width/2) - ex.x;
-            float dy = (player.hitbox.y + player.hitbox.height/2) - ex.y;
-            float dist = (float)Math.sqrt(dx*dx + dy*dy);
-
-            if (!ex.hasDamaged && dist <= ex.radius) {
-                if (!player.isShielding && player.health > 0) {
-                    player.health -= 40;
+                if (b.rect.x < 0 || b.rect.x > WORLD_WIDTH || b.rect.y < 0 || b.rect.y > WORLD_HEIGHT) {
+                    bullets.removeIndex(i);
                 }
-                ex.hasDamaged = true;
             }
+            // ==== BOMB UPDATE ====
+            for (int i = bossBombs.size - 1; i >= 0; i--) {
+                Bomb b = bossBombs.get(i);
+                b.update(delta);
 
-            if (ex.life <= 0) explosions.removeIndex(i);
-        }
+                if (b.rect.overlaps(player.hitbox) && player.isShielding) {
+                    explosions.add(new Explosion(b.rect.x + 25, b.rect.y + 25, boss.getExplosionAnim()));
+                    bossBombs.removeIndex(i);
+                    continue;
+                }
+                if (b.rect.overlaps(player.hitbox) && !player.isShielding) {
+                    player.health -= 20;
+                    if (player.health < 0) player.health = 0;
+                }
+                if (b.exploded) {
+                    explosions.add(new Explosion(b.rect.x + 25, b.rect.y + 25, boss.getExplosionAnim()));
+                    s_hit.play();
+                    bossBombs.removeIndex(i);
+                }
+            }
+            // == EXPLOSION ==
+            for (int i = explosions.size - 1; i >= 0; i--) {
+                Explosion ex = explosions.get(i);
+                ex.update(delta);
+
+                if (ex.life <= 0) {
+                    explosions.removeIndex(i);
+                    continue;
+                }
+                float dx = (player.hitbox.x + player.hitbox.width/2) - ex.x;
+                float dy = (player.hitbox.y + player.hitbox.height/2) - ex.y;
+                float dist = (float)Math.sqrt(dx*dx + dy*dy);
+
+                if (!ex.hasDamaged && dist <= ex.radius) {
+                    if (!player.isShielding && player.health > 0) {
+                        player.health -= 40;
+                    }
+                    ex.hasDamaged = true;
+                }
+                if (ex.life <= 0) explosions.removeIndex(i);
+            }
+        } // End of if(!GAMEOVER)
 
         // Camera Update
         Camera cam = gameStage.getCamera();
@@ -376,14 +398,12 @@ public class GameScreen implements Screen {
         for (int i = explosions.size - 1; i >= 0; i--) {
             Explosion ex = explosions.get(i);
             ex.update(delta);
-
             if (ex.life <= 0) {
                 explosions.removeIndex(i);
                 continue;
             }
-
             TextureRegion frame = ex.getFrame();
-            batch.draw(frame, ex.x - 64, ex.y - 64, 128, 128); // 128×128 explosion, centered
+            batch.draw(frame, ex.x - 64, ex.y - 64, 128, 128);
         }
         batch.end();
 
@@ -420,36 +440,46 @@ public class GameScreen implements Screen {
             font.draw(uiStage.getBatch(), dialogList[dialogIndex], 40, 80);
         }
 
-        uiStage.getBatch().end();
+        // --- GAMEOVER OVERLAY ---
+        if (currentState == GameState.GAMEOVER) {
+            uiBatch.draw(gameOverTexture, 0, 0, worldWidth, worldHeight);
+        }
+
+        uiBatch.end();
+
+        // --- INPUT LOGIC GAMEOVER (Outside Batch) ---
+        if (currentState == GameState.GAMEOVER) {
+            if (Gdx.input.justTouched()) {
+                game.setScreen(new GameScreen(game));
+                dispose();
+            }
+        }
 
         // Draw health bars
-        shapeR.setProjectionMatrix(cam.combined);
-        shapeR.begin(ShapeRenderer.ShapeType.Filled);
-        if (boss.active) {
-            float pct = boss.hp / boss.maxHp;
+        if (currentState != GameState.GAMEOVER) {
+            shapeR.setProjectionMatrix(cam.combined);
+            shapeR.begin(ShapeRenderer.ShapeType.Filled);
+            if (boss.active) {
+                float pct = boss.hp / boss.maxHp;
+                shapeR.setColor(Color.RED);
+                shapeR.rect(boss.getHitbox().x, boss.getHitbox().y + boss.getHitbox().height + 5, boss.getHitbox().width * pct, 12);
+            }
+            for (Enemy e : enemies) {
+                float pct = (e.maxHp <= 0) ? 0f : (e.hp / e.maxHp);
+                shapeR.setColor(Color.RED);
+                shapeR.rect(e.getHitbox().x, e.getHitbox().y + e.getHitbox().height + 10, 100 * pct, 10);
+            }
             shapeR.setColor(Color.RED);
-            shapeR.rect(boss.getHitbox().x, boss.getHitbox().y + boss.getHitbox().height + 5, boss.getHitbox().width * pct, 12);
+            shapeR.rect(player.getHitbox().x, player.getHitbox().y + player.getHitbox().height + 10, 100 * (player.health / player.MAX_HEALTH), 10);
+            shapeR.end();
+
+            shapeR.begin(ShapeRenderer.ShapeType.Line);
+            shapeR.setColor(Color.YELLOW);
+            shapeR.rect(player.getHitbox().x, player.getHitbox().y, player.getHitbox().width, player.getHitbox().height);
+            shapeR.rect(boss.getHitbox().x, boss.getHitbox().y, boss.getHitbox().width, boss.getHitbox().height);
+            for (Enemy e : enemies) shapeR.rect(e.getHitbox().x, e.getHitbox().y, e.getHitbox().width, e.getHitbox().height);
+            shapeR.end();
         }
-
-        // Enemy HP
-        for (Enemy e : enemies) {
-            float pct = (e.maxHp <= 0) ? 0f : (e.hp / e.maxHp);
-            shapeR.setColor(Color.RED);
-            shapeR.rect(e.getHitbox().x, e.getHitbox().y + e.getHitbox().height + 10, 100 * pct, 10);
-        }
-
-        // Player HP
-        shapeR.setColor(Color.RED);
-        shapeR.rect(player.getHitbox().x, player.getHitbox().y + player.getHitbox().height + 10, 100 * (player.health / player.MAX_HEALTH), 10);
-        shapeR.end();
-
-        // Debug outlines
-        shapeR.begin(ShapeRenderer.ShapeType.Line);
-        shapeR.setColor(Color.YELLOW);
-        shapeR.rect(player.getHitbox().x, player.getHitbox().y, player.getHitbox().width, player.getHitbox().height);
-        shapeR.rect(boss.getHitbox().x, boss.getHitbox().y, boss.getHitbox().width, boss.getHitbox().height);
-        for (Enemy e : enemies) shapeR.rect(e.getHitbox().x, e.getHitbox().y, e.getHitbox().width, e.getHitbox().height);
-        shapeR.end();
     }
 
     void shootFromEnemy(Enemy e) {
@@ -494,11 +524,14 @@ public class GameScreen implements Screen {
         bulletTexture.dispose();
         shieldTexture.dispose();
         healTexture.dispose();
+        gameOverTexture.dispose();
 
-        // Dispose Sound
         s_shot.dispose();
         s_hit.dispose();
         s_dash.dispose();
-        s_heal.dispose(); // <-- Dispose sound heal
+        s_heal.dispose();
+        s_die.dispose();
+
+        bossMusic.dispose();
     }
 }

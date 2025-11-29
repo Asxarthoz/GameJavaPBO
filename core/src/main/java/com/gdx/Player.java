@@ -34,7 +34,7 @@ public class Player extends Actor {
 
     Sound hitSound;
     Sound dashSound;
-    Sound healSound; // <-- Variabel Sound Heal
+    Sound healSound;
 
     // --- SHIELD VARIABLES ---
     public boolean isShielding = false;
@@ -62,12 +62,12 @@ public class Player extends Actor {
 
     float stateTime = 0f;
 
-    // Constructor Updated: Menambahkan parameter healSound
+    // Constructor Updated
     public Player(float x, float y, Texture spriteSheet, Texture attackSheet, Sound sound, Sound soundDash, Sound healSound, TextureRegion shieldRegion) {
         this.setPosition(x, y);
         this.hitSound = sound;
         this.dashSound = soundDash;
-        this.healSound = healSound; // <-- Assign sound ke variabel
+        this.healSound = healSound;
         this.shieldRegion = shieldRegion;
 
         // character sub-rectangle
@@ -119,7 +119,7 @@ public class Player extends Actor {
 
                 // Play Heal Sound
                 if (healSound != null) {
-                    healSound.play(); // <-- Sound Heal Berbunyi di sini
+                    healSound.play();
                 }
 
                 System.out.println("Healed! Current HP: " + health);
