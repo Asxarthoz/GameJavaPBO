@@ -22,19 +22,8 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.List;
 
-/**
- * Launcher JavaFX penuh — UI + handler "Mainkan!" yang menjalankan game LibGDX.
- *
- * IMPORTANT:
- * - Ganti GAME_LAUNCHER_CLASS dengan FQCN class launcher LibGDX-mu
- *   contohnya: "com.mygame.lwjgl3.Lwjgl3Launcher" atau "com.game.desktop.DesktopLauncher"
- * - Pastikan launcher/build.gradle memiliki `implementation project(':lwjgl3')` (atau gunakan copyAssets & reflection)
- * - Assets harus tersedia di root /assets dan disalin ke resources (lihat build.gradle)
- */
 public class Main extends Application {
 
-    // GANTI string ini sesuai nama class main launcher LWJGL3 mu
-    // Contoh: "com.mygame.lwjgl3.Lwjgl3Launcher"
     private static final String GAME_LAUNCHER_CLASS = "com.gdx.lwjgl3.Lwjgl3Launcher";
 
     List<String> videoList = List.of(

@@ -47,7 +47,7 @@ public class Enemy extends Actor {
     }
 
     // SHOOT timing
-    private final float fireTime = 0.12f; // saat frame tembak melepaskan peluru (sesuaikan)
+    private final float fireTime = 0.12f;
     private boolean firedThisShot = false;
 
     public Enemy(float startX, float startY,
@@ -73,19 +73,18 @@ public class Enemy extends Actor {
         dieAnim    = new Animation<>(0.12f, dieFrames);
         dieAnim.setPlayMode(Animation.PlayMode.NORMAL);
 
-        // Set size actor agar getWidth/getHeight valid
+
         TextureRegion firstFrame = idleFrames[0];
         float w = firstFrame.getRegionWidth() * scale;
         float h = firstFrame.getRegionHeight() * scale;
         setSize(w, h);
 
-        // Inisialisasi hitbox relatif terhadap getX/getY
         hitbox = new Rectangle(getX() + getWidth() * 0.25f,
                 getY() + getHeight() * 0.001f,
                 getWidth() * 0.5f,
                 getHeight() * 0.75f);
 
-        // inisialisasi lastShootTime agar tidak langsung menembak
+        // inisialisasi lastShootTime biar ga langsung menembak
         lastShootTime = TimeUtils.nanoTime();
 
         pickNewPatrolTarget();
@@ -196,11 +195,11 @@ public class Enemy extends Actor {
         clampPosition();
     }
 
-    /** Dipanggil dari Main: return true sekali saat animasi tembak mencapai titik melepaskan peluru */
+
     public boolean shouldFire() {
         if (state != EnemyState.SHOOT) return false;
         if (firedThisShot) return false;
-        // jika sudah melewati frame yang kita tentukan → kembalikan true dan tandai fired
+
         if (stateTime >= fireTime) {
             firedThisShot = true;
             return true;

@@ -10,9 +10,7 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 
-/**
- * Player: movement, attack, shield, dash, and heal mechanics.
- */
+
 public class Player extends Actor {
 
     // Health player
@@ -170,7 +168,6 @@ public class Player extends Actor {
             dashCooldownTimer = dashCooldown;
         }
 
-        // Attack input (Hanya bisa attack jika TIDAK shielding)
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT) && !isAttack && !isShielding) {
             isAttack = true;
             attackTime = 0f;
@@ -241,15 +238,15 @@ public class Player extends Actor {
 
     @Override
     public void draw(Batch batch, float parentAlpha) {
-        // --- BAGIAN SAAT KLIK KANAN (SHIELD) ---
+
         if (isShielding) {
-            // Logika flip
+
             boolean flip = !facingRight;
             if (shieldRegion.isFlipX() != flip) {
                 shieldRegion.flip(true, false);
             }
 
-            // --- ATUR POSISI DI SINI ---
+
             float penyesuaianY = -55f;
             float penyesuaianX = -50f;
 
@@ -261,7 +258,7 @@ public class Player extends Actor {
                 shieldRegion.getRegionHeight() * scale * 2.2f
             );
         }
-        // --- BAGIAN NORMAL ---
+
         else {
             TextureRegion frame = getFrame();
             batch.draw(
